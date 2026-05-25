@@ -155,7 +155,7 @@ const DEFAULT_MODELS: Record<Provider, { model: string; baseURL?: string; fallba
   openai: { model: "gpt-4o-mini", baseURL: OPENAI_BASE_URL, fallbacks: ["gpt-5-nano", "gpt-4o-mini"] },
   gemini: { model: "gemini-3.1-flash-lite-preview", fallbacks: ["gemini-2.0-flash"] },
   openclaw: { model: process.env.OPENCLAW_DISPLAY_MODEL || "open", baseURL: OPENCLAW_BASE_URL },
-  ollama: { model: process.env.OLLAMA_MODEL || "gemma3:latest", baseURL: OLLAMA_BASE_URL },
+  ollama: { model: process.env.OLLAMA_MODEL || "qwen3:4b", baseURL: OLLAMA_BASE_URL },
 };
 
 // ===== Utils =====

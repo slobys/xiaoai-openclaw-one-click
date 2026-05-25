@@ -116,11 +116,11 @@ install_docker_if_needed() {
 write_env_if_missing() {
   env_file="$WORK_DIR/.env"
   if [ -f "$env_file" ]; then
-    append_env_if_missing "$env_file" "OPENCLAW_BASE_URL" "${OPENCLAW_BASE_URL:-}"
+    append_env_if_missing "$env_file" "OPENCLAW_BASE_URL" "${OPENCLAW_BASE_URL:-http://192.168.2.238:11435/v1}"
     append_env_if_missing "$env_file" "OPENCLAW_API_KEY" "${OPENCLAW_API_KEY:-xiaoai-local}"
     append_env_if_missing "$env_file" "OPENCLAW_DISPLAY_MODEL" "${OPENCLAW_DISPLAY_MODEL:-open}"
-    append_env_if_missing "$env_file" "OLLAMA_BASE_URL" "${OLLAMA_BASE_URL:-}"
-    append_env_if_missing "$env_file" "OLLAMA_MODEL" "${OLLAMA_MODEL:-gemma3:latest}"
+    append_env_if_missing "$env_file" "OLLAMA_BASE_URL" "${OLLAMA_BASE_URL:-http://192.168.2.193:11434/v1}"
+    append_env_if_missing "$env_file" "OLLAMA_MODEL" "${OLLAMA_MODEL:-qwen3:4b}"
     remove_env_key "$env_file" "OLLAMA_TIMEOUT_MS"
     remove_env_key "$env_file" "OLLAMA_NUM_PREDICT"
     remove_env_key "$env_file" "OLLAMA_KEEP_ALIVE"
@@ -144,11 +144,11 @@ write_env_if_missing() {
     printf 'OPENAI_API_KEY=%s\n' "${OPENAI_API_KEY:-}"
     printf 'GEMINI_API_KEY=%s\n' "${GEMINI_API_KEY:-}"
     printf 'OPENAI_BASE_URL=%s\n' "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
-    printf 'OPENCLAW_BASE_URL=%s\n' "${OPENCLAW_BASE_URL:-}"
+    printf 'OPENCLAW_BASE_URL=%s\n' "${OPENCLAW_BASE_URL:-http://192.168.2.238:11435/v1}"
     printf 'OPENCLAW_API_KEY=%s\n' "${OPENCLAW_API_KEY:-xiaoai-local}"
     printf 'OPENCLAW_DISPLAY_MODEL=%s\n' "${OPENCLAW_DISPLAY_MODEL:-open}"
-    printf 'OLLAMA_BASE_URL=%s\n' "${OLLAMA_BASE_URL:-}"
-    printf 'OLLAMA_MODEL=%s\n' "${OLLAMA_MODEL:-gemma3:latest}"
+    printf 'OLLAMA_BASE_URL=%s\n' "${OLLAMA_BASE_URL:-http://192.168.2.193:11434/v1}"
+    printf 'OLLAMA_MODEL=%s\n' "${OLLAMA_MODEL:-qwen3:4b}"
     printf '# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为: http://OpenClaw设备IP:11435/v1\n'
     printf '# 如果 Ollama 在局域网电脑，OLLAMA_BASE_URL 设置为: http://电脑IP:11434/v1\n'
   } > "$env_file"

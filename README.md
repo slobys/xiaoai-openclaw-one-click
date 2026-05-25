@@ -94,20 +94,25 @@ sh install.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
 
 设置前缀后，普通问答必须先说这个前缀，例如“小爱太阳有多大”。`开启AI`、`切换ollama`、`关闭前缀` 这类管理口令不受前缀限制。
 
-## Ollama / Gemma 局域网模型
+## Ollama 局域网模型
 
-如果你的 Gemma 模型跑在局域网电脑的 Ollama 上，先在那台电脑确认模型名：
+如果你的模型跑在局域网电脑的 Ollama 上，先在那台电脑确认模型名：
 
 ```sh
 ollama list
 ```
 
-例如模型名是 `gemma3:4b`，并且电脑 IP 是 `192.168.2.100`，在 MiGPT 服务器的 `/opt/xiaoai-openclaw/.env` 里设置：
+当前默认按你的局域网拓扑写入：
 
 ```sh
-OLLAMA_BASE_URL=http://192.168.2.100:11434/v1
-OLLAMA_MODEL=gemma3:4b
+OPENCLAW_BASE_URL=http://192.168.2.238:11435/v1
+OPENCLAW_API_KEY=xiaoai-local
+OPENCLAW_DISPLAY_MODEL=open
+OLLAMA_BASE_URL=http://192.168.2.193:11434/v1
+OLLAMA_MODEL=qwen3:4b
 ```
+
+如果你要测试其他模型，只改 `OLLAMA_MODEL`，例如 `qwen3:8b`。
 
 然后重建 MiGPT server 容器：
 
@@ -124,7 +129,7 @@ xiaoai-openclaw
 也可以在运行菜单时直接传入配置，脚本会覆盖 `/opt/xiaoai-openclaw/.env` 里的旧 Ollama 值：
 
 ```sh
-OLLAMA_BASE_URL=http://192.168.2.100:11434/v1 OLLAMA_MODEL=gemma3:4b xiaoai-openclaw
+OLLAMA_BASE_URL=http://192.168.2.193:11434/v1 OLLAMA_MODEL=qwen3:4b xiaoai-openclaw
 ```
 
 对小爱说：
@@ -166,7 +171,7 @@ sh install-openclaw-bridge.sh
 2. 在 MiGPT 服务器的 `/opt/xiaoai-openclaw/.env` 里设置：
 
 ```sh
-OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
+OPENCLAW_BASE_URL=http://192.168.2.238:11435/v1
 OPENCLAW_API_KEY=任意字符串
 OPENCLAW_DISPLAY_MODEL=open
 ```
