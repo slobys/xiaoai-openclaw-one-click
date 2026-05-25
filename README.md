@@ -71,7 +71,7 @@ sh install.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
 ```text
 小爱音箱  ->  ws://软路由或NAS:4399  ->  open-xiaoai-migpt Docker
                                       ->  http://OpenClaw设备IP:11435/v1
-                                      ->  openclaw infer model run
+                                      ->  openclaw agent --session-key agent:main:xiaoai
 ```
 
 ## 前置条件
@@ -81,6 +81,18 @@ sh install.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
 3. 如果直连云模型，至少准备一个模型 API Key：DeepSeek / OpenAI / Gemini。Ollama 局域网调用不需要真实 API Key。
 4. 如果接入 OpenClaw，OpenClaw 所在设备要能被 MiGPT 服务器局域网访问，开放 TCP `11435`。
 5. 如果接入 Ollama，Ollama 所在电脑要能被 MiGPT 服务器局域网访问，开放 TCP `11434`。
+
+## 语音前缀
+
+默认不需要额外前缀，说话会直接进入当前模式。可用口令：
+
+```text
+设置前缀小爱
+查看前缀
+关闭前缀
+```
+
+设置前缀后，普通问答必须先说这个前缀，例如“小爱太阳有多大”。`开启AI`、`切换ollama`、`关闭前缀` 这类管理口令不受前缀限制。
 
 ## Ollama / Gemma 局域网模型
 
@@ -135,10 +147,21 @@ OLLAMA_BASE_URL=http://192.168.2.100:11434/v1 OLLAMA_MODEL=gemma3:4b xiaoai-open
 
 ```sh
 cd xiaoai-openclaw-one-click
-OPENCLAW_MODEL=openai/gpt-5.4 sh install-openclaw-bridge.sh
+sh install-openclaw-bridge.sh
 ```
 
-这里的 `OPENCLAW_MODEL` 是 NAS / OpenClaw 设备上的真实模型名，必须是 `openclaw infer model run` 认识的模型，例如 `openai/gpt-5.4`。
+bridge 默认使用 OpenClaw Agent 模式，并绑定固定会话 `agent:main:xiaoai`，这样小爱连续对话会进入同一个 OpenClaw 会话，而不是每次都变成无上下文的一次性模型调用。
+
+常用可选项：
+
+```sh
+OPENCLAW_SESSION_KEY=agent:main:xiaoai \
+sh install-openclaw-bridge.sh
+```
+
+默认不强制指定模型，使用 OpenClaw 当前配置的默认 Agent 模型。如果确实要指定模型，再额外传 `OPENCLAW_MODEL=模型名`。
+
+如果只想跑无上下文的一次性模型调用，可以加 `OPENCLAW_BRIDGE_MODE=infer`。
 
 2. 在 MiGPT 服务器的 `/opt/xiaoai-openclaw/.env` 里设置：
 
@@ -178,7 +201,7 @@ sh install.sh --server-only
 测试模型
 ```
 
-`openclaw-llm-bridge` 同时兼容 `/v1/responses` 和 `/v1/chat/completions`。`slobys/xiaoai` 的 OpenAI 分支默认会调用 `/responses`，所以这里重点支持了 Responses 格式。
+`openclaw-llm-bridge` 同时兼容 `/v1/responses` 和 `/v1/chat/completions`。`slobys/xiaoai` 的 OpenAI 分支默认会调用 `/responses`，所以这里重点支持了 Responses 格式。健康检查可用 `curl http://OpenClaw设备IP:11435/health`，正常会返回 `mode`、`model` 和 `sessionKey`。
 
 安全建议：bridge 默认只适合局域网。公网使用必须套内网 VPN / Tailscale / 防火墙白名单，或者设置 `OPENCLAW_BRIDGE_TOKEN`。
 

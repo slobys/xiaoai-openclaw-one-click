@@ -82,10 +82,10 @@ function dbg(...args: any[]) {
   } catch {}
 }
 
-// ===== 前缀模式状态 =====
+// ===== 输入前缀状态：控制用户是否必须先说指定前缀 =====
 const prefixState =
   (globalThis as any).__open_xiaoai_prefix_state ||
-  { enabled: false, prefix: "主人：" };
+  { enabled: false, prefix: "" };
 (globalThis as any).__open_xiaoai_prefix_state = prefixState;
 
 // ===== 模式开关状态：AI / 原生小爱 =====
@@ -170,22 +170,26 @@ function compactText(s: string) {
 }
 function normalizePrefix(p: string) {
   let x = (p || "").trim();
-  if (!x) x = "主人";
-  if (!/[：:，,。.!?？\s]$/.test(x)) x += "：";
+  if (!x) x = "小爱";
   return x;
 }
-function applyPrefixToText(text: string) {
+function stripInputPrefix(text: string) {
   const s = (text || "").trim();
-  if (!s) return "";
-  if (!prefixState.enabled) return s;
+  if (!prefixState.enabled) return { ok: true, text: s };
 
-  const raw = (prefixState.prefix || "").trim();
-  const p = normalizePrefix(raw);
+  const p = normalizePrefix(prefixState.prefix);
+  if (!p) return { ok: true, text: s };
 
-  if (raw && s.startsWith(raw)) return s;
-  if (s.startsWith(p)) return s;
+  if (s.startsWith(p)) return { ok: true, text: s.slice(p.length).trim() };
 
-  return p + s;
+  const normalizedText = normCmd(s);
+  const normalizedPrefix = normCmd(p);
+  if (normalizedPrefix && normalizedText.startsWith(normalizedPrefix)) {
+    const after = normalizedText.slice(normalizedPrefix.length).trim();
+    return { ok: true, text: after || s };
+  }
+
+  return { ok: false, text: s };
 }
 function splitForSpeaker(text: string, maxLen = SPEAK_CHUNK_LEN) {
   const clean = compactText(text);
@@ -362,7 +366,7 @@ async function playOneChunk(speaker: any, text: string, blocking: boolean) {
 
 /** ✅ 播报：不阻塞 onMessage，可打断（默认非阻塞播放 + 自己等待估时） */
 function startSpeak(engine: any, seq: number, text: string, meta?: string) {
-  const finalText = applyPrefixToText(text);
+  const finalText = compactText(text);
   logA(finalText, meta);
 
   try {
@@ -738,10 +742,8 @@ export const kOpenXiaoAIConfig = {
       cmd === "播放非阻塞" || cmd === "非阻塞播放" ||
       cmd === "播放阻塞" || cmd === "阻塞播放";
 
-    // ✅ 关键最小修复：
-    // 当前已经在原生模式下，并且这句不是脚本命令 -> 直接交给系统原生小爱
-    // 不做任何 abort / cancel / silence，避免把原生语音通道提前打断
-    if (modeState.mode === "native" && !isScriptCommand) {
+    // 当前已经在原生模式且没有启用输入前缀时，非脚本命令直接交给系统原生小爱。
+    if (modeState.mode === "native" && !isScriptCommand && !prefixState.enabled) {
       return { handled: false };
     }
 
@@ -814,19 +816,33 @@ export const kOpenXiaoAIConfig = {
 
     // ===== 前缀 =====
     if (cmd === "开启前缀") {
+      if (!prefixState.prefix) prefixState.prefix = "小爱";
       prefixState.enabled = true;
-      startSpeak(engine, mySeq, "前缀已开启。");
+      startSpeak(engine, mySeq, `前缀已开启：${normalizePrefix(prefixState.prefix)}。`);
       return { handled: true };
     }
     if (cmd === "关闭前缀") {
       prefixState.enabled = false;
-      startSpeak(engine, mySeq, "前缀已关闭。");
+      startSpeak(engine, mySeq, "前缀已关闭，现在不用前缀也会响应。");
       return { handled: true };
     }
     if (raw.startsWith("设置前缀")) {
       const v = raw.replace(/^设置前缀/, "").trim();
-      if (v) prefixState.prefix = v;
-      startSpeak(engine, mySeq, `前缀已设置为：${prefixState.prefix}`);
+      if (v) {
+        prefixState.prefix = normalizePrefix(v);
+        prefixState.enabled = true;
+        startSpeak(engine, mySeq, `前缀已设置为：${prefixState.prefix}。以后需要先说这个前缀。`);
+      } else {
+        startSpeak(engine, mySeq, "请说：设置前缀 加上你想用的词。");
+      }
+      return { handled: true };
+    }
+    if (cmd === "查看前缀") {
+      if (!prefixState.enabled) {
+        startSpeak(engine, mySeq, "前缀未开启。");
+      } else {
+        startSpeak(engine, mySeq, `当前前缀：${normalizePrefix(prefixState.prefix)}。`);
+      }
       return { handled: true };
     }
 
@@ -939,9 +955,15 @@ export const kOpenXiaoAIConfig = {
       return { handled: true };
     }
 
+    const prefixed = stripInputPrefix(raw);
+    if (!isScriptCommand && !prefixed.ok) {
+      return { handled: false };
+    }
+    const effectiveRaw = prefixed.text || raw;
+
     // ===== 原生模式 =====
     if (modeState.mode === "native") {
-      const ok = await askNativeXiaoAI(engine, raw);
+      const ok = await askNativeXiaoAI(engine, effectiveRaw);
       if (!ok) return { handled: false };
       return { handled: true };
     }
@@ -964,7 +986,7 @@ export const kOpenXiaoAIConfig = {
     }, timeoutMs);
 
     const sys = buildSystem(cur.provider, cur.model);
-    const userText = mergeAddon(raw);
+    const userText = mergeAddon(effectiveRaw);
 
     (async () => {
       const t0 = nowMs();

@@ -6,16 +6,20 @@ const { execFile } = require("child_process");
 
 const host = process.env.OPENCLAW_BRIDGE_HOST || "0.0.0.0";
 const port = Number(process.env.OPENCLAW_BRIDGE_PORT || 11435);
-const model = process.env.OPENCLAW_MODEL || "openai/gpt-5.4";
+const model = process.env.OPENCLAW_MODEL || "";
+const bridgeMode = (process.env.OPENCLAW_BRIDGE_MODE || "agent").toLowerCase();
+const agent = process.env.OPENCLAW_AGENT || "main";
+const sessionKey = process.env.OPENCLAW_SESSION_KEY || `agent:${agent}:xiaoai`;
+const thinking = process.env.OPENCLAW_THINKING || "";
 const respectRequestModel = process.env.OPENCLAW_RESPECT_REQUEST_MODEL === "1";
 const token = process.env.OPENCLAW_BRIDGE_TOKEN || "";
 const timeoutMs = Number(process.env.OPENCLAW_TIMEOUT_MS || 60000);
 const openclawBin = process.env.OPENCLAW_BIN || "openclaw";
 
-function normalizeModelName(name) {
+function normalizeModelName(name, fallback) {
   const raw = String(name || "").trim();
   const lowered = raw.toLowerCase();
-  if (!raw || lowered === "open" || lowered === "openclaw") return "openai/gpt-5.4";
+  if (!raw || lowered === "open" || lowered === "openclaw") return fallback || "";
   return raw;
 }
 
@@ -84,8 +88,62 @@ function responsesInputToPrompt(input) {
   return String(input || "");
 }
 
-function runOpenClaw(prompt, requestedModel) {
-  const selectedModel = normalizeModelName(respectRequestModel && requestedModel ? requestedModel : model);
+function extractAgentText(data) {
+  const payloads = data && data.result && Array.isArray(data.result.payloads) ? data.result.payloads : [];
+  const joined = payloads
+    .map((p) => (p && typeof p.text === "string" ? p.text : ""))
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+  if (joined) return joined;
+  return String(
+    data?.result?.finalAssistantVisibleText ||
+      data?.result?.finalAssistantRawText ||
+      data?.text ||
+      data?.output ||
+      data?.response ||
+      ""
+  ).trim();
+}
+
+function runOpenClawAgent(prompt, requestedModel) {
+  const selectedModel = normalizeModelName(respectRequestModel && requestedModel ? requestedModel : model, "");
+  const args = [
+    "agent",
+    "--json",
+    "--agent",
+    agent,
+    "--session-key",
+    sessionKey,
+    "--message",
+    prompt,
+    "--timeout",
+    String(Math.max(1, Math.ceil(timeoutMs / 1000))),
+  ];
+  if (selectedModel) args.push("--model", selectedModel);
+  if (thinking) args.push("--thinking", thinking);
+
+  return new Promise((resolve, reject) => {
+    execFile(openclawBin, args, { timeout: timeoutMs + 5000, maxBuffer: 2 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) {
+        err.message = `${err.message}${stderr ? `\n${stderr}` : ""}`;
+        reject(err);
+        return;
+      }
+      try {
+        const data = JSON.parse(stdout || "{}");
+        const text = extractAgentText(data);
+        if (text) resolve(text);
+        else reject(new Error("openclaw_agent_empty_response"));
+      } catch {
+        resolve(String(stdout || "").trim());
+      }
+    });
+  });
+}
+
+function runOpenClawInfer(prompt, requestedModel) {
+  const selectedModel = normalizeModelName(respectRequestModel && requestedModel ? requestedModel : model, "openai/gpt-5.4");
   return new Promise((resolve, reject) => {
     execFile(
       openclawBin,
@@ -108,6 +166,11 @@ function runOpenClaw(prompt, requestedModel) {
   });
 }
 
+function runOpenClaw(prompt, requestedModel) {
+  if (bridgeMode === "infer" || bridgeMode === "model") return runOpenClawInfer(prompt, requestedModel);
+  return runOpenClawAgent(prompt, requestedModel);
+}
+
 async function handleChat(req, res) {
   const body = await readJson(req);
   const prompt = messagesToPrompt(body.messages);
@@ -116,7 +179,7 @@ async function handleChat(req, res) {
     id: `chatcmpl_${Date.now()}`,
     object: "chat.completion",
     created: Math.floor(Date.now() / 1000),
-    model,
+    model: model || "openclaw-default",
     choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }],
   });
 }
@@ -129,7 +192,7 @@ async function handleResponses(req, res) {
     id: `resp_${Date.now()}`,
     object: "response",
     created_at: Math.floor(Date.now() / 1000),
-    model,
+    model: model || "openclaw-default",
     output_text: text,
     output: [
       {
@@ -144,7 +207,7 @@ async function handleResponses(req, res) {
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/health") {
-      send(res, 200, { ok: true, model });
+      send(res, 200, { ok: true, mode: bridgeMode, model: model || "openclaw-default", agent, sessionKey });
       return;
     }
     if (!authorized(req)) {

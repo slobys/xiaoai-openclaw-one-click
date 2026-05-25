@@ -5,8 +5,12 @@ APP_NAME="openclaw-llm-bridge"
 WORK_DIR="/opt/${APP_NAME}"
 PORT="${OPENCLAW_BRIDGE_PORT:-11435}"
 HOST="${OPENCLAW_BRIDGE_HOST:-0.0.0.0}"
-MODEL="${OPENCLAW_MODEL:-openai/gpt-5.4}"
+MODEL="${OPENCLAW_MODEL:-}"
 TOKEN="${OPENCLAW_BRIDGE_TOKEN:-}"
+BRIDGE_MODE="${OPENCLAW_BRIDGE_MODE:-agent}"
+AGENT="${OPENCLAW_AGENT:-main}"
+SESSION_KEY="${OPENCLAW_SESSION_KEY:-agent:${AGENT}:xiaoai}"
+THINKING="${OPENCLAW_THINKING:-}"
 
 need_root() {
   if [ "$(id -u)" -ne 0 ]; then
@@ -70,6 +74,13 @@ fetch() {
   fi
 }
 
+cache_bust_url() {
+  case "$1" in
+    *\?*) printf '%s&ts=%s\n' "$1" "$(date +%s)" ;;
+    *) printf '%s?ts=%s\n' "$1" "$(date +%s)" ;;
+  esac
+}
+
 detect_source_file() {
   script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
   if [ -f "$script_dir/bridge/openclaw-llm-bridge.js" ]; then
@@ -128,7 +139,7 @@ install_bridge() {
     cp "$src" "$WORK_DIR/openclaw-llm-bridge.js"
   else
     base="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
-    fetch "$base/bridge/openclaw-llm-bridge.js" "$WORK_DIR/openclaw-llm-bridge.js"
+    fetch "$(cache_bust_url "$base/bridge/openclaw-llm-bridge.js")" "$WORK_DIR/openclaw-llm-bridge.js"
   fi
   chmod +x "$WORK_DIR/openclaw-llm-bridge.js"
 
@@ -136,6 +147,10 @@ install_bridge() {
 OPENCLAW_BRIDGE_HOST=${HOST}
 OPENCLAW_BRIDGE_PORT=${PORT}
 OPENCLAW_MODEL=${MODEL}
+OPENCLAW_BRIDGE_MODE=${BRIDGE_MODE}
+OPENCLAW_AGENT=${AGENT}
+OPENCLAW_SESSION_KEY=${SESSION_KEY}
+OPENCLAW_THINKING=${THINKING}
 OPENCLAW_BRIDGE_TOKEN=${TOKEN}
 OPENCLAW_TIMEOUT_MS=${OPENCLAW_TIMEOUT_MS:-60000}
 OPENCLAW_BIN=${openclaw_bin}
@@ -170,7 +185,7 @@ EOF
     if [ "$service_user" = "$(id -un)" ]; then
       nohup node "$WORK_DIR/openclaw-llm-bridge.js" >> "$WORK_DIR/bridge.log" 2>&1 &
     else
-      su - "$service_user" -c "OPENCLAW_BIN='$openclaw_bin' OPENCLAW_MODEL='$MODEL' OPENCLAW_BRIDGE_HOST='$HOST' OPENCLAW_BRIDGE_PORT='$PORT' OPENCLAW_TIMEOUT_MS='${OPENCLAW_TIMEOUT_MS:-60000}' nohup node '$WORK_DIR/openclaw-llm-bridge.js' >> '$WORK_DIR/bridge.log' 2>&1 &"
+      su - "$service_user" -c "OPENCLAW_BIN='$openclaw_bin' OPENCLAW_MODEL='$MODEL' OPENCLAW_BRIDGE_MODE='$BRIDGE_MODE' OPENCLAW_AGENT='$AGENT' OPENCLAW_SESSION_KEY='$SESSION_KEY' OPENCLAW_THINKING='$THINKING' OPENCLAW_BRIDGE_HOST='$HOST' OPENCLAW_BRIDGE_PORT='$PORT' OPENCLAW_TIMEOUT_MS='${OPENCLAW_TIMEOUT_MS:-60000}' nohup node '$WORK_DIR/openclaw-llm-bridge.js' >> '$WORK_DIR/bridge.log' 2>&1 &"
     fi
   fi
 
@@ -179,9 +194,10 @@ EOF
   echo "OpenClaw bridge 已启动: http://${ip_addr}:${PORT}/v1"
   echo "运行用户: ${service_user}"
   echo "OpenClaw 命令: ${openclaw_bin}"
-  echo "MiGPT 服务器 .env 里设置：OPENAI_BASE_URL=http://${ip_addr}:${PORT}/v1"
+  echo "OpenClaw 模式: ${BRIDGE_MODE}, 会话: ${SESSION_KEY}"
+  echo "MiGPT 服务器 .env 里设置：OPENCLAW_BASE_URL=http://${ip_addr}:${PORT}/v1"
   if [ -n "$TOKEN" ]; then
-    echo "MiGPT 服务器 .env 里设置：OPENAI_API_KEY=${TOKEN}"
+    echo "MiGPT 服务器 .env 里设置：OPENCLAW_API_KEY=${TOKEN}"
   else
     echo "未设置 OPENCLAW_BRIDGE_TOKEN，局域网内可直接调用；仅建议内网使用。"
   fi
