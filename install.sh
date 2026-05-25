@@ -120,7 +120,7 @@ write_env_if_missing() {
     printf 'OPENAI_BASE_URL=%s\n' "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
     printf '# 如果 OpenClaw 在另一台设备，设置为: http://OpenClaw设备IP:11435/v1\n'
   } > "$env_file"
-  log "如果没有通过环境变量传入 Key，请编辑 $env_file 后重启容器。"
+  log "如果没有通过环境变量传入 Key，请编辑 $env_file 后重新运行服务器端部署以重建容器。"
   log "如果要接入远端 OpenClaw，请把 OPENAI_BASE_URL 改成 http://OpenClaw设备IP:11435/v1，并说“切换openai”。"
 }
 

@@ -98,11 +98,25 @@ OPENAI_BASE_URL=http://OpenClaw设备IP:11435/v1
 OPENAI_API_KEY=任意字符串
 ```
 
-3. 重启 MiGPT server：
+3. 重新创建 MiGPT server 容器，让新的 `.env` 注入容器：
 
 ```sh
-docker restart xiaoai-openclaw
+xiaoai-openclaw
 ```
+
+然后在菜单里选择：
+
+```text
+1) 一键部署服务器端 Docker
+```
+
+直接执行命令也可以：
+
+```sh
+sh install.sh --server-only
+```
+
+注意：`docker restart xiaoai-openclaw` 不会重新读取 `--env-file`，改过 `/opt/xiaoai-openclaw/.env` 后必须重建容器。
 
 4. 对小爱说：
 
