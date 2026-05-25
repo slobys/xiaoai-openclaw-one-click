@@ -5,8 +5,8 @@ APP_NAME="xiaoai-openclaw"
 WORK_DIR="/opt/${APP_NAME}"
 CONTAINER_NAME="${APP_NAME}"
 PORT="${XIAOAI_OPENCLAW_PORT:-4399}"
-CONFIG_URL="${XIAOAI_CONFIG_URL:-https://raw.githubusercontent.com/slobys/xiaoai/main/config.ts}"
-CONFIG_CN_URL="${XIAOAI_CONFIG_CN_URL:-https://gh-proxy.com/https://raw.githubusercontent.com/slobys/xiaoai/main/config.ts}"
+CONFIG_URL="${XIAOAI_CONFIG_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/templates/config-openclaw.ts}"
+CONFIG_CN_URL="${XIAOAI_CONFIG_CN_URL:-https://gh-proxy.com/https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/templates/config-openclaw.ts}"
 CLIENT_INIT_URL="${XIAOAI_CLIENT_INIT_URL:-https://gitee.com/idootop/artifacts/releases/download/open-xiaoai-client/init.sh}"
 CLIENT_BOOT_URL="${XIAOAI_CLIENT_BOOT_URL:-https://gitee.com/idootop/artifacts/releases/download/open-xiaoai-client/boot.sh}"
 
@@ -118,10 +118,13 @@ write_env_if_missing() {
     printf 'OPENAI_API_KEY=%s\n' "${OPENAI_API_KEY:-}"
     printf 'GEMINI_API_KEY=%s\n' "${GEMINI_API_KEY:-}"
     printf 'OPENAI_BASE_URL=%s\n' "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
-    printf '# 如果 OpenClaw 在另一台设备，设置为: http://OpenClaw设备IP:11435/v1\n'
+    printf 'OPENCLAW_BASE_URL=%s\n' "${OPENCLAW_BASE_URL:-}"
+    printf 'OPENCLAW_API_KEY=%s\n' "${OPENCLAW_API_KEY:-xiaoai-local}"
+    printf 'OPENCLAW_MODEL=%s\n' "${OPENCLAW_MODEL:-openclaw}"
+    printf '# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为: http://OpenClaw设备IP:11435/v1\n'
   } > "$env_file"
   log "如果没有通过环境变量传入 Key，请编辑 $env_file 后重新运行服务器端部署以重建容器。"
-  log "如果要接入远端 OpenClaw，请把 OPENAI_BASE_URL 改成 http://OpenClaw设备IP:11435/v1，并说“切换openai”。"
+  log "如果要接入远端 OpenClaw，请把 OPENCLAW_BASE_URL 改成 http://OpenClaw设备IP:11435/v1，并说“切换openclaw”。"
 }
 
 install_server() {

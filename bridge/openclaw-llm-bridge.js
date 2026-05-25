@@ -7,6 +7,7 @@ const { execFile } = require("child_process");
 const host = process.env.OPENCLAW_BRIDGE_HOST || "0.0.0.0";
 const port = Number(process.env.OPENCLAW_BRIDGE_PORT || 11435);
 const model = process.env.OPENCLAW_MODEL || "openai/gpt-5.4";
+const respectRequestModel = process.env.OPENCLAW_RESPECT_REQUEST_MODEL === "1";
 const token = process.env.OPENCLAW_BRIDGE_TOKEN || "";
 const timeoutMs = Number(process.env.OPENCLAW_TIMEOUT_MS || 60000);
 const openclawBin = process.env.OPENCLAW_BIN || "openclaw";
@@ -77,7 +78,7 @@ function responsesInputToPrompt(input) {
 }
 
 function runOpenClaw(prompt, requestedModel) {
-  const selectedModel = requestedModel || model;
+  const selectedModel = respectRequestModel && requestedModel ? requestedModel : model;
   return new Promise((resolve, reject) => {
     execFile(
       openclawBin,
@@ -108,7 +109,7 @@ async function handleChat(req, res) {
     id: `chatcmpl_${Date.now()}`,
     object: "chat.completion",
     created: Math.floor(Date.now() / 1000),
-    model: body.model || model,
+    model,
     choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }],
   });
 }
@@ -121,7 +122,7 @@ async function handleResponses(req, res) {
     id: `resp_${Date.now()}`,
     object: "response",
     created_at: Math.floor(Date.now() / 1000),
-    model: body.model || model,
+    model,
     output_text: text,
     output: [
       {
