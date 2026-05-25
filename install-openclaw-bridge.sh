@@ -93,8 +93,26 @@ install_node_if_needed() {
   fi
 }
 
+stop_existing_bridge() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl stop "$APP_NAME" 2>/dev/null || true
+  fi
+
+  if command -v pgrep >/dev/null 2>&1; then
+    pids=$(pgrep -f "${WORK_DIR}/openclaw-llm-bridge.js" 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+      echo "发现旧 OpenClaw bridge 进程，正在停止..."
+      kill $pids 2>/dev/null || true
+      sleep 1
+      pids=$(pgrep -f "${WORK_DIR}/openclaw-llm-bridge.js" 2>/dev/null || true)
+      [ -z "$pids" ] || kill -9 $pids 2>/dev/null || true
+    fi
+  fi
+}
+
 install_bridge() {
   need_root
+  stop_existing_bridge
   service_user=$(run_user)
   service_home=$(run_home "$service_user")
   openclaw_bin=$(detect_openclaw_bin "$service_user" "$service_home") || {
