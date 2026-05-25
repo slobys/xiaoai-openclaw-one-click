@@ -36,7 +36,7 @@ const SPEAK_CHUNK_LEN = envInt("SPEAK_CHUNK_LEN", 28);
 const SPEAK_MS_PER_CHAR = envInt("SPEAK_MS_PER_CHAR", 220);
 const SPEAK_CHUNK_GAP_MS = envInt("SPEAK_CHUNK_GAP_MS", 260);
 const HARD_ABORT_RECOVERY_MS = 1400;
-const PREFIX_GATE_MODE = (process.env.PREFIX_GATE_MODE || "keyword").trim().toLowerCase();
+const PREFIX_GATE_MODE = (process.env.PREFIX_GATE_MODE || "text").trim().toLowerCase();
 
 // ===== 播放模式：默认非阻塞（关键：让 barge-in 生效）=====
 const playMode =
