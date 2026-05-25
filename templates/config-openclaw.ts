@@ -36,6 +36,7 @@ const SPEAK_CHUNK_LEN = envInt("SPEAK_CHUNK_LEN", 28);
 const SPEAK_MS_PER_CHAR = envInt("SPEAK_MS_PER_CHAR", 220);
 const SPEAK_CHUNK_GAP_MS = envInt("SPEAK_CHUNK_GAP_MS", 260);
 const HARD_ABORT_RECOVERY_MS = 1400;
+const PREFIX_GATE_MODE = (process.env.PREFIX_GATE_MODE || "keyword").trim().toLowerCase();
 
 // ===== 播放模式：默认非阻塞（关键：让 barge-in 生效）=====
 const playMode =
@@ -193,6 +194,8 @@ function stripInputPrefix(text: string) {
     return { ok: true, text: after || s };
   }
 
+  if (PREFIX_GATE_MODE !== "text") return { ok: true, text: s };
+
   return { ok: false, text: s };
 }
 function splitForSpeaker(text: string, maxLen = SPEAK_CHUNK_LEN) {
@@ -213,6 +216,26 @@ function normCmd(raw: string) {
     .replace(/\s+/g, "")
     .replace(/[，。！？；：、,.!?;:~`"'“”‘’（）()【】[\]{}<>《》]/g, "")
     .toLowerCase();
+}
+const BASE_CALL_AI_KEYWORDS = ["", "开", "切", "设", "关", "查", "停", "闭", "你", "我", "请", "帮", "问", "前", "模"];
+const PREFIX_CALL_AI_KEYWORDS = ["开", "切", "设", "关", "查", "停", "闭", "前", "模"];
+function activeCallAIKeywords() {
+  if (!prefixState.enabled) return BASE_CALL_AI_KEYWORDS.slice();
+
+  const out = PREFIX_CALL_AI_KEYWORDS.slice();
+  const p = normalizePrefix(prefixState.prefix);
+  if (p) {
+    out.push(p);
+    const first = p.slice(0, 1);
+    if (first && !out.includes(first)) out.push(first);
+  }
+  return out;
+}
+function syncCallAIKeywords() {
+  const config = (globalThis as any).__open_xiaoai_config_ref;
+  if (!config || !Array.isArray(config.callAIKeywords)) return;
+  const next = activeCallAIKeywords();
+  config.callAIKeywords.splice(0, config.callAIKeywords.length, ...next);
 }
 function looksLikeQuestion(t: string) {
   return (
@@ -721,7 +744,7 @@ function syncOpenAIModelIfFallback(usedModel: string) {
 
 // ====== 主配置 ======
 export const kOpenXiaoAIConfig = {
-  callAIKeywords: ["", "开", "切", "设", "关", "查", "停", "闭", "你", "我", "请", "帮", "问", "前", "模"],
+  callAIKeywords: activeCallAIKeywords(),
 
   prompt: {
     system: compactText(`
@@ -829,11 +852,13 @@ export const kOpenXiaoAIConfig = {
     if (cmd === "开启前缀") {
       if (!prefixState.prefix) prefixState.prefix = "小爱";
       prefixState.enabled = true;
+      syncCallAIKeywords();
       startSpeak(engine, mySeq, `前缀已开启：${normalizePrefix(prefixState.prefix)}。`);
       return { handled: true };
     }
     if (cmd === "关闭前缀") {
       prefixState.enabled = false;
+      syncCallAIKeywords();
       startSpeak(engine, mySeq, "前缀已关闭，现在不用前缀也会响应。");
       return { handled: true };
     }
@@ -842,6 +867,7 @@ export const kOpenXiaoAIConfig = {
       if (v) {
         prefixState.prefix = normalizePrefix(v);
         prefixState.enabled = true;
+        syncCallAIKeywords();
         startSpeak(engine, mySeq, `前缀已设置为：${prefixState.prefix}。以后需要先说这个前缀。`);
       } else {
         startSpeak(engine, mySeq, "请说：设置前缀 加上你想用的词。");
@@ -1031,3 +1057,5 @@ export const kOpenXiaoAIConfig = {
     return { handled: true };
   },
 };
+(globalThis as any).__open_xiaoai_config_ref = kOpenXiaoAIConfig;
+syncCallAIKeywords();
