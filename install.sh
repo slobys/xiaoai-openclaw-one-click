@@ -106,8 +106,23 @@ cache_bust_url() {
 
 detect_lan_ip() {
   if command -v ip >/dev/null 2>&1; then
+    detected_ip=$(ip -o -4 addr show dev br-lan scope global 2>/dev/null | awk '
+      {
+        split($4, a, "/")
+        ip = a[1]
+        if (ip ~ /^10\./ || ip ~ /^192\.168\./ || ip ~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./) {
+          print ip
+          exit
+        }
+      }
+    ')
+    if [ -n "$detected_ip" ]; then
+      printf '%s\n' "$detected_ip"
+      return 0
+    fi
     ip -o -4 addr show scope global 2>/dev/null | awk '
-      $2 ~ /^(docker|br-|veth|tailscale|tun|wg)/ { next }
+      $2 ~ /^(docker|docker0|veth|tailscale|tun|wg|zt|ppp)/ { next }
+      $2 ~ /^br-/ && $2 != "br-lan" { next }
       {
         split($4, a, "/")
         ip = a[1]
@@ -126,10 +141,7 @@ detect_server_ip() {
   fi
   SERVER_IP=$(detect_lan_ip || true)
   if [ -z "$SERVER_IP" ]; then
-    SERVER_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' || true)
-  fi
-  if [ -z "$SERVER_IP" ]; then
-    printf "请输入服务器局域网 IP（音箱能访问的地址）: "
+    printf "未能自动识别局域网 IP，请输入服务器局域网 IP（音箱能访问的地址）: "
     read -r SERVER_IP
   fi
   [ -n "$SERVER_IP" ] || die "服务器 IP 不能为空"

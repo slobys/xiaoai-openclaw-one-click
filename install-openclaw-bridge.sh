@@ -83,8 +83,23 @@ cache_bust_url() {
 
 detect_lan_ip() {
   if command -v ip >/dev/null 2>&1; then
+    detected_ip=$(ip -o -4 addr show dev br-lan scope global 2>/dev/null | awk '
+      {
+        split($4, a, "/")
+        ip = a[1]
+        if (ip ~ /^10\./ || ip ~ /^192\.168\./ || ip ~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./) {
+          print ip
+          exit
+        }
+      }
+    ')
+    if [ -n "$detected_ip" ]; then
+      printf '%s\n' "$detected_ip"
+      return 0
+    fi
     ip -o -4 addr show scope global 2>/dev/null | awk '
-      $2 ~ /^(docker|br-|veth|tailscale|tun|wg)/ { next }
+      $2 ~ /^(docker|docker0|veth|tailscale|tun|wg|zt|ppp)/ { next }
+      $2 ~ /^br-/ && $2 != "br-lan" { next }
       {
         split($4, a, "/")
         ip = a[1]
@@ -206,7 +221,6 @@ EOF
   fi
 
   ip_addr=$(detect_lan_ip || true)
-  [ -n "$ip_addr" ] || ip_addr=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' || true)
   [ -n "$ip_addr" ] || ip_addr="OpenClaw设备IP"
   echo "OpenClaw bridge 已启动: http://${ip_addr}:${PORT}/v1"
   echo "运行用户: ${service_user}"
