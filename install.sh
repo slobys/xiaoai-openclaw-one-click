@@ -195,46 +195,42 @@ write_env_if_missing() {
     update_env_if_blank_or_value "$env_file" "OLLAMA_BASE_URL" "http://192.168.2.193:11434/v1" ""
     update_env_if_blank_or_value "$env_file" "OLLAMA_MODEL" "qwen3:4b" ""
     update_env_if_blank_or_value "$env_file" "OLLAMA_MODEL" "qwen3:4b" "gemma3:latest"
-    append_env_notes_if_missing "$env_file"
+    annotate_env_file "$env_file"
     return 0
   fi
   log "创建环境变量文件: $env_file"
   umask 077
   {
-    printf '# ===== API Key 配置 =====\n'
-    printf '# DeepSeek 官方 API Key；说“切换 deepseek”后使用。\n'
+    printf '# DEEPSEEK_API_KEY：DeepSeek 官方 API Key；说“切换 deepseek”后使用。\n'
     printf 'DEEPSEEK_API_KEY=%s\n' "${DEEPSEEK_API_KEY:-}"
-    printf '# OpenAI 官方或兼容接口 API Key；说“切换 openai”后使用。\n'
+    printf '# OPENAI_API_KEY：OpenAI 官方或兼容接口 API Key；说“切换 openai”后使用。\n'
     printf 'OPENAI_API_KEY=%s\n' "${OPENAI_API_KEY:-}"
-    printf '# Gemini API Key；说“切换 gemini”后使用。\n'
+    printf '# GEMINI_API_KEY：Gemini API Key；说“切换 gemini”后使用。\n'
     printf 'GEMINI_API_KEY=%s\n' "${GEMINI_API_KEY:-}"
-    printf '# OpenAI 接口地址；兼容服务可改成自己的 /v1 地址。\n'
+    printf '# OPENAI_BASE_URL：OpenAI 接口地址；兼容服务可改成自己的 /v1 地址。\n'
     printf 'OPENAI_BASE_URL=%s\n' "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
     printf '\n'
-    printf '# ===== OpenClaw 配置 =====\n'
-    printf '# OpenClaw API Bridge 地址；OpenClaw 在另一台设备时改成 http://OpenClaw设备IP:11435/v1。\n'
+    printf '# OPENCLAW_BASE_URL：OpenClaw API Bridge 地址；OpenClaw 在另一台设备时改成 http://OpenClaw设备IP:11435/v1。\n'
     printf 'OPENCLAW_BASE_URL=%s\n' "${OPENCLAW_BASE_URL:-http://192.168.2.238:11435/v1}"
-    printf '# OpenClaw API Bridge 鉴权 Key；需和部署 Bridge 时的 OPENCLAW_BRIDGE_TOKEN 一致，默认本地测试可用 xiaoai-local。\n'
+    printf '# OPENCLAW_API_KEY：OpenClaw API Bridge 鉴权 Key；需和部署 Bridge 时的 OPENCLAW_BRIDGE_TOKEN 一致，默认本地测试可用 xiaoai-local。\n'
     printf 'OPENCLAW_API_KEY=%s\n' "${OPENCLAW_API_KEY:-xiaoai-local}"
-    printf '# 语音里显示/切换用的模型名；默认说“切换 open”即可使用 OpenClaw。\n'
+    printf '# OPENCLAW_DISPLAY_MODEL：语音里显示/切换用的模型名；默认说“切换 open”即可使用 OpenClaw。\n'
     printf 'OPENCLAW_DISPLAY_MODEL=%s\n' "${OPENCLAW_DISPLAY_MODEL:-open}"
-    printf '# OpenClaw 正常问答超时时间，单位毫秒；OpenClaw 响应慢时可适当调大。\n'
+    printf '# OPENCLAW_TIMEOUT_MS：OpenClaw 正常问答超时时间，单位毫秒；OpenClaw 响应慢时可适当调大。\n'
     printf 'OPENCLAW_TIMEOUT_MS=%s\n' "${OPENCLAW_TIMEOUT_MS:-90000}"
-    printf '# “测试模型”命令的超时时间，单位毫秒；一般保持 30000 即可。\n'
+    printf '# OPENCLAW_TEST_TIMEOUT_MS：“测试模型”命令的超时时间，单位毫秒；一般保持 30000 即可。\n'
     printf 'OPENCLAW_TEST_TIMEOUT_MS=%s\n' "${OPENCLAW_TEST_TIMEOUT_MS:-30000}"
     printf '\n'
-    printf '# ===== 小爱播报配置 =====\n'
-    printf '# 每段最多字符数；越小越不容易漏字，但回答会被切成更多段。\n'
+    printf '# SPEAK_CHUNK_LEN：每段最多字符数；越小越不容易漏字，但回答会被切成更多段。\n'
     printf 'SPEAK_CHUNK_LEN=%s\n' "${SPEAK_CHUNK_LEN:-28}"
-    printf '# 每个字预估播报耗时，单位毫秒；音箱抢播/漏字时可调大。\n'
+    printf '# SPEAK_MS_PER_CHAR：每个字预估播报耗时，单位毫秒；音箱抢播/漏字时可调大。\n'
     printf 'SPEAK_MS_PER_CHAR=%s\n' "${SPEAK_MS_PER_CHAR:-220}"
-    printf '# 每段播报之间的额外间隔，单位毫秒；仍漏字时可从 260 调到 400。\n'
+    printf '# SPEAK_CHUNK_GAP_MS：每段播报之间的额外间隔，单位毫秒；仍漏字时可从 260 调到 400。\n'
     printf 'SPEAK_CHUNK_GAP_MS=%s\n' "${SPEAK_CHUNK_GAP_MS:-260}"
     printf '\n'
-    printf '# ===== Ollama 配置 =====\n'
-    printf '# Ollama OpenAI 兼容地址；Ollama 在局域网电脑时改成 http://电脑IP:11434/v1。\n'
+    printf '# OLLAMA_BASE_URL：Ollama OpenAI 兼容地址；Ollama 在局域网电脑时改成 http://电脑IP:11434/v1。\n'
     printf 'OLLAMA_BASE_URL=%s\n' "${OLLAMA_BASE_URL:-http://192.168.2.193:11434/v1}"
-    printf '# Ollama 模型名；必须和 ollama list 里的模型名一致，说“切换 ollama”后使用。\n'
+    printf '# OLLAMA_MODEL：Ollama 模型名；必须和 ollama list 里的模型名一致，说“切换 ollama”后使用。\n'
     printf 'OLLAMA_MODEL=%s\n' "${OLLAMA_MODEL:-qwen3:4b}"
   } > "$env_file"
   log "如果没有通过环境变量传入 Key，请编辑 $env_file 后重新运行服务器端部署以重建容器。"
@@ -242,30 +238,48 @@ write_env_if_missing() {
   log "如果要接入局域网 Ollama，请把 OLLAMA_BASE_URL 改成 http://电脑IP:11434/v1，OLLAMA_MODEL 改成实际模型名，并说“切换ollama”。"
 }
 
-append_env_notes_if_missing() {
+annotate_env_file() {
   env_file="$1"
-  if grep -q '^# ===== 参数说明 =====' "$env_file"; then
-    return 0
-  fi
-  cat >> "$env_file" <<'EOF'
-
-# ===== 参数说明 =====
-# DEEPSEEK_API_KEY：DeepSeek 官方 API Key；说“切换 deepseek”后使用。
-# OPENAI_API_KEY：OpenAI 官方或兼容接口 API Key；说“切换 openai”后使用。
-# GEMINI_API_KEY：Gemini API Key；说“切换 gemini”后使用。
-# OPENAI_BASE_URL：OpenAI 接口地址；兼容服务可改成自己的 /v1 地址。
-# OPENCLAW_BASE_URL：OpenClaw API Bridge 地址；OpenClaw 在另一台设备时改成 http://OpenClaw设备IP:11435/v1。
-# OPENCLAW_API_KEY：OpenClaw API Bridge 鉴权 Key；需和 Bridge 的 OPENCLAW_BRIDGE_TOKEN 一致，默认本地测试可用 xiaoai-local。
-# OPENCLAW_DISPLAY_MODEL：语音里显示/切换用的模型名；默认说“切换 open”即可使用 OpenClaw。
-# OPENCLAW_TIMEOUT_MS：OpenClaw 正常问答超时时间，单位毫秒；OpenClaw 响应慢时可适当调大。
-# OPENCLAW_TEST_TIMEOUT_MS：“测试模型”命令的超时时间，单位毫秒；一般保持 30000 即可。
-# SPEAK_CHUNK_LEN：每段最多字符数；越小越不容易漏字，但回答会被切成更多段。
-# SPEAK_MS_PER_CHAR：每个字预估播报耗时，单位毫秒；音箱抢播/漏字时可调大。
-# SPEAK_CHUNK_GAP_MS：每段播报之间的额外间隔，单位毫秒；仍漏字时可从 260 调到 400。
-# OLLAMA_BASE_URL：Ollama OpenAI 兼容地址；Ollama 在局域网电脑时改成 http://电脑IP:11434/v1。
-# OLLAMA_MODEL：Ollama 模型名；必须和 ollama list 里的模型名一致，说“切换 ollama”后使用。
-EOF
-  log "已补充参数说明到 $env_file"
+  tmp_file="${env_file}.tmp.$$"
+  awk '
+    BEGIN {
+      note["DEEPSEEK_API_KEY"] = "DeepSeek 官方 API Key；说“切换 deepseek”后使用。"
+      note["OPENAI_API_KEY"] = "OpenAI 官方或兼容接口 API Key；说“切换 openai”后使用。"
+      note["GEMINI_API_KEY"] = "Gemini API Key；说“切换 gemini”后使用。"
+      note["OPENAI_BASE_URL"] = "OpenAI 接口地址；兼容服务可改成自己的 /v1 地址。"
+      note["OPENCLAW_BASE_URL"] = "OpenClaw API Bridge 地址；OpenClaw 在另一台设备时改成 http://OpenClaw设备IP:11435/v1。"
+      note["OPENCLAW_API_KEY"] = "OpenClaw API Bridge 鉴权 Key；需和 Bridge 的 OPENCLAW_BRIDGE_TOKEN 一致，默认本地测试可用 xiaoai-local。"
+      note["OPENCLAW_DISPLAY_MODEL"] = "语音里显示/切换用的模型名；默认说“切换 open”即可使用 OpenClaw。"
+      note["OPENCLAW_TIMEOUT_MS"] = "OpenClaw 正常问答超时时间，单位毫秒；OpenClaw 响应慢时可适当调大。"
+      note["OPENCLAW_TEST_TIMEOUT_MS"] = "“测试模型”命令的超时时间，单位毫秒；一般保持 30000 即可。"
+      note["SPEAK_CHUNK_LEN"] = "每段最多字符数；越小越不容易漏字，但回答会被切成更多段。"
+      note["SPEAK_MS_PER_CHAR"] = "每个字预估播报耗时，单位毫秒；音箱抢播/漏字时可调大。"
+      note["SPEAK_CHUNK_GAP_MS"] = "每段播报之间的额外间隔，单位毫秒；仍漏字时可从 260 调到 400。"
+      note["OLLAMA_BASE_URL"] = "Ollama OpenAI 兼容地址；Ollama 在局域网电脑时改成 http://电脑IP:11434/v1。"
+      note["OLLAMA_MODEL"] = "Ollama 模型名；必须和 ollama list 里的模型名一致，说“切换 ollama”后使用。"
+    }
+    /^# ===== 参数说明 =====/ { skip_notes = 1; next }
+    skip_notes && /^# (DEEPSEEK_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_BASE_URL|OPENCLAW_BASE_URL|OPENCLAW_API_KEY|OPENCLAW_DISPLAY_MODEL|OPENCLAW_TIMEOUT_MS|OPENCLAW_TEST_TIMEOUT_MS|SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|OLLAMA_BASE_URL|OLLAMA_MODEL)：/ { next }
+    skip_notes && /^$/ { next }
+    skip_notes { skip_notes = 0 }
+    /^# ===== (API Key 配置|OpenClaw 配置|小爱播报配置|Ollama 配置) =====/ { next }
+    /^# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为:/ { next }
+    /^# 如果 Ollama 在局域网电脑，OLLAMA_BASE_URL 设置为:/ { next }
+    /^# (DeepSeek 官方 API Key|OpenAI 官方或兼容接口 API Key|Gemini API Key|OpenAI 接口地址|OpenClaw API Bridge 地址|OpenClaw API Bridge 鉴权 Key|语音里显示\/切换用的模型名|OpenClaw 正常问答超时时间|“测试模型”命令的超时时间|每段最多字符数|每个字预估播报耗时|每段播报之间的额外间隔|Ollama OpenAI 兼容地址|Ollama 模型名)/ { next }
+    /^# (DEEPSEEK_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_BASE_URL|OPENCLAW_BASE_URL|OPENCLAW_API_KEY|OPENCLAW_DISPLAY_MODEL|OPENCLAW_TIMEOUT_MS|OPENCLAW_TEST_TIMEOUT_MS|SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|OLLAMA_BASE_URL|OLLAMA_MODEL)：/ { next }
+    /^[A-Z0-9_]+=/ {
+      key = $0
+      sub(/=.*/, "", key)
+      if (key in note) {
+        print "# " key "：" note[key]
+      }
+      print
+      next
+    }
+    { print }
+  ' "$env_file" > "$tmp_file"
+  mv "$tmp_file" "$env_file"
+  log "已按变量位置补充参数备注到 $env_file"
 }
 
 append_env_if_missing() {
