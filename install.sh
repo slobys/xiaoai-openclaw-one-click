@@ -176,9 +176,9 @@ write_env_if_missing() {
     append_env_if_missing "$env_file" "SPEAK_CHUNK_LEN" "${SPEAK_CHUNK_LEN:-28}"
     append_env_if_missing "$env_file" "SPEAK_MS_PER_CHAR" "${SPEAK_MS_PER_CHAR:-220}"
     append_env_if_missing "$env_file" "SPEAK_CHUNK_GAP_MS" "${SPEAK_CHUNK_GAP_MS:-260}"
-    append_env_if_missing "$env_file" "PREFIX_GATE_MODE" "${PREFIX_GATE_MODE:-text}"
     append_env_if_missing "$env_file" "OLLAMA_BASE_URL" "${OLLAMA_BASE_URL:-http://192.168.2.193:11434/v1}"
     append_env_if_missing "$env_file" "OLLAMA_MODEL" "${OLLAMA_MODEL:-qwen3:4b}"
+    remove_env_key "$env_file" "PREFIX_GATE_MODE"
     remove_env_key "$env_file" "OLLAMA_TIMEOUT_MS"
     remove_env_key "$env_file" "OLLAMA_NUM_PREDICT"
     remove_env_key "$env_file" "OLLAMA_KEEP_ALIVE"
@@ -190,14 +190,12 @@ write_env_if_missing() {
     update_env_if_provided "$env_file" "SPEAK_CHUNK_LEN" "${SPEAK_CHUNK_LEN:-}"
     update_env_if_provided "$env_file" "SPEAK_MS_PER_CHAR" "${SPEAK_MS_PER_CHAR:-}"
     update_env_if_provided "$env_file" "SPEAK_CHUNK_GAP_MS" "${SPEAK_CHUNK_GAP_MS:-}"
-    update_env_if_provided "$env_file" "PREFIX_GATE_MODE" "${PREFIX_GATE_MODE:-}"
     update_env_if_provided "$env_file" "OLLAMA_BASE_URL" "${OLLAMA_BASE_URL:-}"
     update_env_if_provided "$env_file" "OLLAMA_MODEL" "${OLLAMA_MODEL:-}"
     update_env_if_blank_or_value "$env_file" "OPENCLAW_BASE_URL" "http://192.168.2.238:11435/v1" ""
     update_env_if_blank_or_value "$env_file" "OLLAMA_BASE_URL" "http://192.168.2.193:11434/v1" ""
     update_env_if_blank_or_value "$env_file" "OLLAMA_MODEL" "qwen3:4b" ""
     update_env_if_blank_or_value "$env_file" "OLLAMA_MODEL" "qwen3:4b" "gemma3:latest"
-    update_env_if_blank_or_value "$env_file" "PREFIX_GATE_MODE" "text" "keyword"
     annotate_env_file "$env_file"
     return 0
   fi
@@ -230,9 +228,6 @@ write_env_if_missing() {
     printf 'SPEAK_MS_PER_CHAR=%s\n' "${SPEAK_MS_PER_CHAR:-220}"
     printf '# SPEAK_CHUNK_GAP_MS：每段播报之间的额外间隔，单位毫秒；仍漏字时可从 260 调到 400。\n'
     printf 'SPEAK_CHUNK_GAP_MS=%s\n' "${SPEAK_CHUNK_GAP_MS:-260}"
-    printf '# PREFIX_GATE_MODE：前缀识别方式；text 严格要求日志文本包含前缀，keyword 为兼容模式。\n'
-    printf 'PREFIX_GATE_MODE=%s\n' "${PREFIX_GATE_MODE:-text}"
-    printf '\n'
     printf '# OLLAMA_BASE_URL：Ollama OpenAI 兼容地址；Ollama 在局域网电脑时改成 http://电脑IP:11434/v1。\n'
     printf 'OLLAMA_BASE_URL=%s\n' "${OLLAMA_BASE_URL:-http://192.168.2.193:11434/v1}"
     printf '# OLLAMA_MODEL：Ollama 模型名；必须和 ollama list 里的模型名一致，说“切换 ollama”后使用。\n'
@@ -260,7 +255,6 @@ annotate_env_file() {
       note["SPEAK_CHUNK_LEN"] = "每段最多字符数；越小越不容易漏字，但回答会被切成更多段。"
       note["SPEAK_MS_PER_CHAR"] = "每个字预估播报耗时，单位毫秒；音箱抢播/漏字时可调大。"
       note["SPEAK_CHUNK_GAP_MS"] = "每段播报之间的额外间隔，单位毫秒；仍漏字时可从 260 调到 400。"
-      note["PREFIX_GATE_MODE"] = "前缀识别方式；text 严格要求日志文本包含前缀，keyword 为兼容模式。"
       note["OLLAMA_BASE_URL"] = "Ollama OpenAI 兼容地址；Ollama 在局域网电脑时改成 http://电脑IP:11434/v1。"
       note["OLLAMA_MODEL"] = "Ollama 模型名；必须和 ollama list 里的模型名一致，说“切换 ollama”后使用。"
     }

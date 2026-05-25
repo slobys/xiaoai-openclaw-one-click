@@ -36,7 +36,6 @@ const SPEAK_CHUNK_LEN = envInt("SPEAK_CHUNK_LEN", 28);
 const SPEAK_MS_PER_CHAR = envInt("SPEAK_MS_PER_CHAR", 220);
 const SPEAK_CHUNK_GAP_MS = envInt("SPEAK_CHUNK_GAP_MS", 260);
 const HARD_ABORT_RECOVERY_MS = 1400;
-const PREFIX_GATE_MODE = (process.env.PREFIX_GATE_MODE || "text").trim().toLowerCase();
 
 // ===== 播放模式：默认非阻塞（关键：让 barge-in 生效）=====
 const playMode =
@@ -86,12 +85,6 @@ function dbg(...args: any[]) {
     console.log("[dbg]", ...args);
   } catch {}
 }
-
-// ===== 输入前缀状态：控制用户是否必须先说指定前缀 =====
-const prefixState =
-  (globalThis as any).__open_xiaoai_prefix_state ||
-  { enabled: false, prefix: "" };
-(globalThis as any).__open_xiaoai_prefix_state = prefixState;
 
 // ===== 模式开关状态：AI / 原生小爱 =====
 const modeState =
@@ -173,31 +166,6 @@ function sleep(ms: number) {
 function compactText(s: string) {
   return (s || "").replace(/\s+/g, " ").trim();
 }
-function normalizePrefix(p: string) {
-  let x = (p || "").trim();
-  if (!x) x = "小爱";
-  return x;
-}
-function stripInputPrefix(text: string) {
-  const s = (text || "").trim();
-  if (!prefixState.enabled) return { ok: true, text: s };
-
-  const p = normalizePrefix(prefixState.prefix);
-  if (!p) return { ok: true, text: s };
-
-  if (s.startsWith(p)) return { ok: true, text: s.slice(p.length).trim() };
-
-  const normalizedText = normCmd(s);
-  const normalizedPrefix = normCmd(p);
-  if (normalizedPrefix && normalizedText.startsWith(normalizedPrefix)) {
-    const after = normalizedText.slice(normalizedPrefix.length).trim();
-    return { ok: true, text: after || s };
-  }
-
-  if (PREFIX_GATE_MODE !== "text") return { ok: true, text: s };
-
-  return { ok: false, text: s };
-}
 function splitForSpeaker(text: string, maxLen = SPEAK_CHUNK_LEN) {
   const clean = compactText(text);
   const parts = clean.split(/(?<=[。！？；，、,!?;…\n])/).map((x) => x.trim()).filter(Boolean);
@@ -216,26 +184,6 @@ function normCmd(raw: string) {
     .replace(/\s+/g, "")
     .replace(/[，。！？；：、,.!?;:~`"'“”‘’（）()【】[\]{}<>《》]/g, "")
     .toLowerCase();
-}
-const BASE_CALL_AI_KEYWORDS = ["", "开", "切", "设", "关", "查", "停", "闭", "你", "我", "请", "帮", "问", "前", "模"];
-const PREFIX_CALL_AI_KEYWORDS = ["开", "切", "设", "关", "查", "停", "闭", "前", "模"];
-function activeCallAIKeywords() {
-  if (!prefixState.enabled) return BASE_CALL_AI_KEYWORDS.slice();
-
-  const out = PREFIX_CALL_AI_KEYWORDS.slice();
-  const p = normalizePrefix(prefixState.prefix);
-  if (p) {
-    out.push(p);
-    const first = p.slice(0, 1);
-    if (first && !out.includes(first)) out.push(first);
-  }
-  return out;
-}
-function syncCallAIKeywords() {
-  const config = (globalThis as any).__open_xiaoai_config_ref;
-  if (!config || !Array.isArray(config.callAIKeywords)) return;
-  const next = activeCallAIKeywords();
-  config.callAIKeywords.splice(0, config.callAIKeywords.length, ...next);
 }
 function looksLikeQuestion(t: string) {
   return (
@@ -744,7 +692,7 @@ function syncOpenAIModelIfFallback(usedModel: string) {
 
 // ====== 主配置 ======
 export const kOpenXiaoAIConfig = {
-  callAIKeywords: activeCallAIKeywords(),
+  callAIKeywords: ["", "开", "切", "设", "关", "查", "停", "闭", "你", "我", "请", "帮", "问", "模"],
 
   prompt: {
     system: compactText(`
@@ -764,8 +712,6 @@ export const kOpenXiaoAIConfig = {
     const isScriptCommand =
       cmd === "开启ai" || cmd === "切换ai" || cmd === "ai模式" ||
       cmd === "开启小爱" || cmd === "切换小爱" || cmd === "原生模式" || cmd === "原生小爱" ||
-      cmd === "开启前缀" || cmd === "关闭前缀" || cmd === "查看前缀" ||
-      raw.startsWith("设置前缀") ||
       cmd.startsWith("切换") || raw.startsWith("设置模型") ||
       cmd === "测试模型" || cmd === "测试当前模型" ||
       cmd === "停止" || cmd === "闭嘴" ||
@@ -776,8 +722,8 @@ export const kOpenXiaoAIConfig = {
       cmd === "播放非阻塞" || cmd === "非阻塞播放" ||
       cmd === "播放阻塞" || cmd === "阻塞播放";
 
-    // 当前已经在原生模式且没有启用输入前缀时，非脚本命令直接交给系统原生小爱。
-    if (modeState.mode === "native" && !isScriptCommand && !prefixState.enabled) {
+    // 当前已经在原生模式时，非脚本命令直接交给系统原生小爱。
+    if (modeState.mode === "native" && !isScriptCommand) {
       return { handled: false };
     }
 
@@ -845,41 +791,6 @@ export const kOpenXiaoAIConfig = {
     if (cmd === "停止" || cmd === "闭嘴") {
       await cancelSpeaking(engine, { abortNativeToo: true });
       startSpeak(engine, mySeq, "好的。");
-      return { handled: true };
-    }
-
-    // ===== 前缀 =====
-    if (cmd === "开启前缀") {
-      if (!prefixState.prefix) prefixState.prefix = "小爱";
-      prefixState.enabled = true;
-      syncCallAIKeywords();
-      startSpeak(engine, mySeq, `前缀已开启：${normalizePrefix(prefixState.prefix)}。`);
-      return { handled: true };
-    }
-    if (cmd === "关闭前缀") {
-      prefixState.enabled = false;
-      syncCallAIKeywords();
-      startSpeak(engine, mySeq, "前缀已关闭，现在不用前缀也会响应。");
-      return { handled: true };
-    }
-    if (raw.startsWith("设置前缀")) {
-      const v = raw.replace(/^设置前缀/, "").trim();
-      if (v) {
-        prefixState.prefix = normalizePrefix(v);
-        prefixState.enabled = true;
-        syncCallAIKeywords();
-        startSpeak(engine, mySeq, `前缀已设置为：${prefixState.prefix}。以后需要先说这个前缀。`);
-      } else {
-        startSpeak(engine, mySeq, "请说：设置前缀 加上你想用的词。");
-      }
-      return { handled: true };
-    }
-    if (cmd === "查看前缀") {
-      if (!prefixState.enabled) {
-        startSpeak(engine, mySeq, "前缀未开启。");
-      } else {
-        startSpeak(engine, mySeq, `当前前缀：${normalizePrefix(prefixState.prefix)}。`);
-      }
       return { handled: true };
     }
 
@@ -992,11 +903,7 @@ export const kOpenXiaoAIConfig = {
       return { handled: true };
     }
 
-    const prefixed = stripInputPrefix(raw);
-    if (!isScriptCommand && !prefixed.ok) {
-      return { handled: false };
-    }
-    const effectiveRaw = prefixed.text || raw;
+    const effectiveRaw = raw;
 
     // ===== 原生模式 =====
     if (modeState.mode === "native") {
@@ -1057,5 +964,3 @@ export const kOpenXiaoAIConfig = {
     return { handled: true };
   },
 };
-(globalThis as any).__open_xiaoai_config_ref = kOpenXiaoAIConfig;
-syncCallAIKeywords();
