@@ -123,7 +123,7 @@ OLLAMA_BASE_URL=http://192.168.2.100:11434/v1 OLLAMA_MODEL=gemma3:4b xiaoai-open
 测试模型
 ```
 
-可用口令包括：`切换ollama`、`切换gemma`、`切换电脑`、`切换本地电脑`。
+可用口令包括：`切换ollama`、`切换欧拉拉`、`切换奥拉马`、`切换gemma`、`切换电脑`、`切换本地电脑`。
 
 如果 Ollama 只监听本机，需要在 Ollama 电脑上允许局域网访问，例如 Linux systemd 环境可设置 `OLLAMA_HOST=0.0.0.0:11434` 后重启 Ollama；Windows / macOS 也要确保防火墙放行 `11434`。
 

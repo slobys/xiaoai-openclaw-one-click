@@ -863,6 +863,9 @@ export const kOpenXiaoAIConfig = {
     }
     if (
       cmd === "切换ollama" || cmd === "切换olama" ||
+      cmd === "切换欧拉拉" || cmd === "切换欧拉马" ||
+      cmd === "切换欧拉玛" || cmd === "切换奥拉马" ||
+      cmd === "切换奥拉玛" ||
       cmd === "切换gemma" || cmd === "切换伽马" ||
       cmd === "切换电脑" || cmd === "切换本地电脑" ||
       cmd === "切换局域网模型"
