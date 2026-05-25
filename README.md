@@ -6,13 +6,19 @@
 
 ## 一键菜单
 
-海外 / GitHub：
+NAS / 普通 Linux 用户：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/bootstrap.sh -o /tmp/xiaoai-openclaw && chmod +x /tmp/xiaoai-openclaw && sudo /tmp/xiaoai-openclaw
+```
+
+root / iStoreOS / OpenWrt 用户：
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/bootstrap.sh -o /usr/bin/xiaoai-openclaw && chmod +x /usr/bin/xiaoai-openclaw && xiaoai-openclaw
 ```
 
-国内 / Gitee：
+国内 / Gitee（root 用户）：
 
 ```sh
 curl -fsSL https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/bootstrap.sh -o /usr/bin/xiaoai-openclaw && chmod +x /usr/bin/xiaoai-openclaw && xiaoai-openclaw
