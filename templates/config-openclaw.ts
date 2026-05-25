@@ -29,6 +29,8 @@ function envInt(name: string, fallback: number) {
 
 const LLM_TIMEOUT_MS = envInt("LLM_TIMEOUT_MS", 20000);
 const TEST_TIMEOUT_MS = envInt("TEST_TIMEOUT_MS", 6000);
+const OPENCLAW_TIMEOUT_MS = envInt("OPENCLAW_TIMEOUT_MS", 90000);
+const OPENCLAW_TEST_TIMEOUT_MS = envInt("OPENCLAW_TEST_TIMEOUT_MS", 30000);
 const OLLAMA_TIMEOUT_MS = envInt("OLLAMA_TIMEOUT_MS", 90000);
 const SPEAK_CHUNK_LEN = 45;
 const HARD_ABORT_RECOVERY_MS = 1400;
@@ -247,6 +249,7 @@ function hasKeyFor(p: Provider) {
   return !!KEYS.DEEPSEEK;
 }
 function timeoutForProvider(p: Provider, baseTimeoutMs: number) {
+  if (p === "openclaw") return baseTimeoutMs === TEST_TIMEOUT_MS ? OPENCLAW_TEST_TIMEOUT_MS : OPENCLAW_TIMEOUT_MS;
   return p === "ollama" ? OLLAMA_TIMEOUT_MS : baseTimeoutMs;
 }
 function providerDisplayName(p: Provider) {
