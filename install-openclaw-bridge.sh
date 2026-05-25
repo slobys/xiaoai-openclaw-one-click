@@ -60,7 +60,7 @@ install_bridge() {
   if [ -n "$src" ]; then
     cp "$src" "$WORK_DIR/openclaw-llm-bridge.js"
   else
-    base="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/naiyou88/xiaoai-openclaw-one-click/main}"
+    base="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
     fetch "$base/bridge/openclaw-llm-bridge.js" "$WORK_DIR/openclaw-llm-bridge.js"
   fi
   chmod +x "$WORK_DIR/openclaw-llm-bridge.js"
@@ -120,4 +120,3 @@ case "${1:-install}" in
     ;;
   *) echo "用法: sh install-openclaw-bridge.sh [install|status|logs|uninstall]" ;;
 esac
-

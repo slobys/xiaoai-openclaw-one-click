@@ -9,7 +9,7 @@
 海外 / GitHub：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/naiyou88/xiaoai-openclaw-one-click/main/bootstrap.sh -o /usr/bin/xiaoai-openclaw && chmod +x /usr/bin/xiaoai-openclaw && xiaoai-openclaw
+curl -fsSL https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/bootstrap.sh -o /usr/bin/xiaoai-openclaw && chmod +x /usr/bin/xiaoai-openclaw && xiaoai-openclaw
 ```
 
 国内 / Gitee：
@@ -21,7 +21,7 @@ curl -fsSL https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/bootstr
 完整项目方式：
 
 ```sh
-git clone https://github.com/naiyou88/xiaoai-openclaw-one-click.git
+git clone https://github.com/slobys/xiaoai-openclaw-one-click.git
 cd xiaoai-openclaw-one-click
 sh bootstrap.sh
 ```

@@ -18,7 +18,7 @@ if [ ! -f "$INSTALL_SH" ]; then
       wget -qO "$out" "$url"
     fi
   }
-  BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/naiyou88/xiaoai-openclaw-one-click/main}"
+  BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
   fetch "$BASE_URL/install.sh" "$TMP_DIR/install.sh"
   chmod +x "$TMP_DIR/install.sh"
   INSTALL_SH="$TMP_DIR/install.sh"
@@ -53,7 +53,7 @@ while true; do
       if [ ! -f "$BRIDGE_SH" ]; then
         TMP_DIR="/tmp/${PROJECT_NAME}-one-click"
         mkdir -p "$TMP_DIR"
-        BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/naiyou88/xiaoai-openclaw-one-click/main}"
+        BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
         fetch "$BASE_URL/install-openclaw-bridge.sh" "$TMP_DIR/install-openclaw-bridge.sh"
         BRIDGE_SH="$TMP_DIR/install-openclaw-bridge.sh"
       fi
