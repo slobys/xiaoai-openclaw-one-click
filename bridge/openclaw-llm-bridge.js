@@ -12,6 +12,13 @@ const token = process.env.OPENCLAW_BRIDGE_TOKEN || "";
 const timeoutMs = Number(process.env.OPENCLAW_TIMEOUT_MS || 60000);
 const openclawBin = process.env.OPENCLAW_BIN || "openclaw";
 
+function normalizeModelName(name) {
+  const raw = String(name || "").trim();
+  const lowered = raw.toLowerCase();
+  if (!raw || lowered === "open" || lowered === "openclaw") return "openai/gpt-5.4";
+  return raw;
+}
+
 function send(res, status, body) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
@@ -78,7 +85,7 @@ function responsesInputToPrompt(input) {
 }
 
 function runOpenClaw(prompt, requestedModel) {
-  const selectedModel = respectRequestModel && requestedModel ? requestedModel : model;
+  const selectedModel = normalizeModelName(respectRequestModel && requestedModel ? requestedModel : model);
   return new Promise((resolve, reject) => {
     execFile(
       openclawBin,

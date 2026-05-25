@@ -91,15 +91,17 @@ cd xiaoai-openclaw-one-click
 OPENCLAW_MODEL=openai/gpt-5.4 sh install-openclaw-bridge.sh
 ```
 
+这里的 `OPENCLAW_MODEL` 是 NAS / OpenClaw 设备上的真实模型名，必须是 `openclaw infer model run` 认识的模型，例如 `openai/gpt-5.4`。
+
 2. 在 MiGPT 服务器的 `/opt/xiaoai-openclaw/.env` 里设置：
 
 ```sh
 OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
 OPENCLAW_API_KEY=任意字符串
-OPENCLAW_MODEL=open
+OPENCLAW_DISPLAY_MODEL=open
 ```
 
-`OPENAI_BASE_URL` / `OPENAI_API_KEY` 仍然保留给真正的 OpenAI 使用。OpenClaw 使用单独的 `open` 口令，不占用 OpenAI 位置。
+`OPENAI_BASE_URL` / `OPENAI_API_KEY` 仍然保留给真正的 OpenAI 使用。OpenClaw 使用单独的 `open` 口令，不占用 OpenAI 位置。MiGPT 服务器上的 `OPENCLAW_DISPLAY_MODEL` 只影响日志和口播显示，不是真实模型名。
 
 3. 重新创建 MiGPT server 容器，让新的 `.env` 注入容器：
 
