@@ -145,7 +145,7 @@ const DEFAULT_MODELS: Record<Provider, { model: string; baseURL?: string; fallba
   deepseek: { model: "deepseek-chat", baseURL: "https://api.deepseek.com/v1" },
   openai: { model: "gpt-4o-mini", baseURL: OPENAI_BASE_URL, fallbacks: ["gpt-5-nano", "gpt-4o-mini"] },
   gemini: { model: "gemini-3.1-flash-lite-preview", fallbacks: ["gemini-2.0-flash"] },
-  openclaw: { model: process.env.OPENCLAW_MODEL || "openclaw", baseURL: OPENCLAW_BASE_URL },
+  openclaw: { model: process.env.OPENCLAW_MODEL || "open", baseURL: OPENCLAW_BASE_URL },
 };
 
 // ===== Utils =====
@@ -230,6 +230,9 @@ function hasKeyFor(p: Provider) {
   if (p === "gemini") return !!KEYS.GEMINI;
   if (p === "openclaw") return !!DEFAULT_MODELS.openclaw.baseURL && !!KEYS.OPENCLAW;
   return !!KEYS.DEEPSEEK;
+}
+function providerDisplayName(p: Provider) {
+  return p === "openclaw" ? "open" : p;
 }
 
 // ===== 强力停播（关键）=====
@@ -572,11 +575,12 @@ async function openaiResponses(opts: {
 }
 
 function buildSystem(provider: Provider, model: string) {
+  const displayProvider = providerDisplayName(provider);
   return compactText(`
 你是运行在小爱音箱上的语音助手，由大模型驱动。
 口播规则：口语化、简短；不要markdown；不要念URL；解释类优先两句话内。
-当前外部大模型：${provider}/${model}。
-如果用户问“你现在用的是哪个模型/你接入了什么模型”，请直接回答：${provider}/${model}。
+当前外部大模型：${displayProvider}/${model}。
+如果用户问“你现在用的是哪个模型/你接入了什么模型”，请直接回答：${displayProvider}/${model}。
 `);
 }
 
@@ -662,7 +666,7 @@ function doSwitchProvider(p: Provider) {
   llmState.modelOverride = "";
   const dm = DEFAULT_MODELS[p].model;
   const keyHint = hasKeyFor(p) ? "" : "（提示：未配置API Key，调用会失败）";
-  return `已切换：${p}（默认模型：${dm}）。${keyHint}`;
+  return `已切换：${providerDisplayName(p)}（默认模型：${dm}）。${keyHint}`;
 }
 
 function syncOpenAIModelIfFallback(usedModel: string) {
@@ -825,7 +829,12 @@ export const kOpenXiaoAIConfig = {
       startSpeak(engine, mySeq, doSwitchProvider("openai"));
       return { handled: true };
     }
-    if (cmd === "切换openclaw" || cmd === "切换爪子" || cmd === "切换本地模型" || cmd === "切换本地ai") {
+    if (
+      cmd === "切换open" || cmd === "切换到open" ||
+      cmd === "切换opencall" || cmd === "切换opencloud" ||
+      cmd === "切换openclaw" || cmd === "切换爪子" ||
+      cmd === "切换本地模型" || cmd === "切换本地ai"
+    ) {
       if (!requireAIMode()) return { handled: true };
       startSpeak(engine, mySeq, doSwitchProvider("openclaw"));
       return { handled: true };
@@ -849,7 +858,7 @@ export const kOpenXiaoAIConfig = {
       }
       const cur = currentProviderModel();
       if (!hasKeyFor(cur.provider)) {
-        startSpeak(engine, mySeq, `你还没配置 ${cur.provider} 的 API Key。`);
+        startSpeak(engine, mySeq, `你还没配置 ${providerDisplayName(cur.provider)} 的 API Key。`);
         return { handled: true };
       }
 
@@ -866,14 +875,15 @@ export const kOpenXiaoAIConfig = {
           if (cur.provider === "openai") syncOpenAIModelIfFallback(r.usedModel);
 
           const ms = nowMs() - t0;
+          const displayProvider = providerDisplayName(cur.provider);
           diag.last = { provider: cur.provider, model: r.usedModel, ok: true, ms, at: nowMs() };
-          startSpeak(engine, mySeq, `连通正常：${cur.provider}/${r.usedModel}，${ms}ms，返回：OK`, `[${cur.provider}/${r.usedModel} ${ms}ms]`);
+          startSpeak(engine, mySeq, `连通正常：${displayProvider}/${r.usedModel}，${ms}ms，返回：OK`, `[${displayProvider}/${r.usedModel} ${ms}ms]`);
         } catch (e: any) {
           clearTimeout(timer);
           const msg = String(e?.message || "unknown_error");
           diag.last = { provider: cur.provider, model: cur.model, ok: false, ms: nowMs() - t0, at: nowMs(), err: msg };
           logE(msg);
-          startSpeak(engine, mySeq, `连通失败：${cur.provider}/${cur.model}，原因：${msg}`);
+          startSpeak(engine, mySeq, `连通失败：${providerDisplayName(cur.provider)}/${cur.model}，原因：${msg}`);
         }
       })();
 
@@ -890,7 +900,7 @@ export const kOpenXiaoAIConfig = {
     // ===== AI 模式问答 =====
     const cur = currentProviderModel();
     if (!hasKeyFor(cur.provider)) {
-      startSpeak(engine, mySeq, `你还没配置 ${cur.provider} 的 API Key。`);
+      startSpeak(engine, mySeq, `你还没配置 ${providerDisplayName(cur.provider)} 的 API Key。`);
       return { handled: true };
     }
 
@@ -913,7 +923,7 @@ export const kOpenXiaoAIConfig = {
 
         const ms = nowMs() - t0;
         const answer = compactText(r.text) || "我没听清，你能再说一次吗？";
-        startSpeak(engine, mySeq, answer, `[${cur.provider}/${r.usedModel} ${ms}ms]`);
+        startSpeak(engine, mySeq, answer, `[${providerDisplayName(cur.provider)}/${r.usedModel} ${ms}ms]`);
       } catch (e: any) {
         clearTimeout(timer);
         if (mySeq !== state.seq) return;
@@ -922,7 +932,7 @@ export const kOpenXiaoAIConfig = {
         if (msg.includes("aborted") || msg.includes("Abort") || msg.includes("The operation was aborted")) return;
 
         logE(msg);
-        startSpeak(engine, mySeq, `调用失败（${cur.provider}/${cur.model}）：${msg}`);
+        startSpeak(engine, mySeq, `调用失败（${providerDisplayName(cur.provider)}/${cur.model}）：${msg}`);
       }
     })();
 

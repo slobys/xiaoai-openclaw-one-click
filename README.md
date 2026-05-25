@@ -96,10 +96,10 @@ OPENCLAW_MODEL=openai/gpt-5.4 sh install-openclaw-bridge.sh
 ```sh
 OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
 OPENCLAW_API_KEY=任意字符串
-OPENCLAW_MODEL=openclaw
+OPENCLAW_MODEL=open
 ```
 
-`OPENAI_BASE_URL` / `OPENAI_API_KEY` 仍然保留给真正的 OpenAI 使用。OpenClaw 使用单独的 `openclaw` 供应商，不占用 OpenAI 位置。
+`OPENAI_BASE_URL` / `OPENAI_API_KEY` 仍然保留给真正的 OpenAI 使用。OpenClaw 使用单独的 `open` 口令，不占用 OpenAI 位置。
 
 3. 重新创建 MiGPT server 容器，让新的 `.env` 注入容器：
 
@@ -125,7 +125,7 @@ sh install.sh --server-only
 
 ```text
 开启AI
-切换openclaw
+切换open
 测试模型
 ```
 
@@ -145,7 +145,7 @@ sh install.sh --server-only
 
 - `开启AI`
 - `开启小爱`
-- `切换openclaw`
+- `切换open`
 - `切换deepseek`
 - `切换openai`
 - `切换谷歌`
