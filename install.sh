@@ -109,6 +109,12 @@ install_docker_if_needed() {
 write_env_if_missing() {
   env_file="$WORK_DIR/.env"
   if [ -f "$env_file" ]; then
+    append_env_if_missing "$env_file" "OPENCLAW_BASE_URL" "${OPENCLAW_BASE_URL:-}"
+    append_env_if_missing "$env_file" "OPENCLAW_API_KEY" "${OPENCLAW_API_KEY:-xiaoai-local}"
+    append_env_if_missing "$env_file" "OPENCLAW_MODEL" "${OPENCLAW_MODEL:-openclaw}"
+    if ! grep -q '^# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为:' "$env_file"; then
+      printf '%s\n' '# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为: http://OpenClaw设备IP:11435/v1' >> "$env_file"
+    fi
     return 0
   fi
   log "创建环境变量文件: $env_file"
@@ -125,6 +131,17 @@ write_env_if_missing() {
   } > "$env_file"
   log "如果没有通过环境变量传入 Key，请编辑 $env_file 后重新运行服务器端部署以重建容器。"
   log "如果要接入远端 OpenClaw，请把 OPENCLAW_BASE_URL 改成 http://OpenClaw设备IP:11435/v1，并说“切换openclaw”。"
+}
+
+append_env_if_missing() {
+  env_file="$1"
+  key="$2"
+  value="$3"
+  if grep -q "^${key}=" "$env_file"; then
+    return 0
+  fi
+  printf '%s=%s\n' "$key" "$value" >> "$env_file"
+  log "已补充 ${key} 到 $env_file"
 }
 
 install_server() {
