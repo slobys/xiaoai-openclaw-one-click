@@ -241,6 +241,18 @@ sh install.sh --restart
 
 清理 bridge 只会删除 `/opt/openclaw-llm-bridge` 和对应服务，不会删除 OpenClaw 主程序。
 
+## 播报丢字调节
+
+如果日志里的回答是完整的，但小爱音箱实际播报漏掉几个字，通常是 TTS 分段衔接太快。可以在 `/opt/xiaoai-openclaw/.env` 调整：
+
+```env
+SPEAK_CHUNK_LEN=28
+SPEAK_MS_PER_CHAR=220
+SPEAK_CHUNK_GAP_MS=260
+```
+
+改完后在菜单里选择 `5) 重启/重建服务器端 Docker（修改配置后用）` 生效。仍然丢字时，优先把 `SPEAK_CHUNK_LEN` 调小到 `20`，或把 `SPEAK_CHUNK_GAP_MS` 调大到 `400`。
+
 ## 安装后文件
 
 - 工作目录：`/opt/xiaoai-openclaw`

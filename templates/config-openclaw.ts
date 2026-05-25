@@ -32,7 +32,9 @@ const TEST_TIMEOUT_MS = envInt("TEST_TIMEOUT_MS", 6000);
 const OPENCLAW_TIMEOUT_MS = envInt("OPENCLAW_TIMEOUT_MS", 90000);
 const OPENCLAW_TEST_TIMEOUT_MS = envInt("OPENCLAW_TEST_TIMEOUT_MS", 30000);
 const OLLAMA_TIMEOUT_MS = envInt("OLLAMA_TIMEOUT_MS", 90000);
-const SPEAK_CHUNK_LEN = 45;
+const SPEAK_CHUNK_LEN = envInt("SPEAK_CHUNK_LEN", 28);
+const SPEAK_MS_PER_CHAR = envInt("SPEAK_MS_PER_CHAR", 220);
+const SPEAK_CHUNK_GAP_MS = envInt("SPEAK_CHUNK_GAP_MS", 260);
 const HARD_ABORT_RECOVERY_MS = 1400;
 
 // ===== 播放模式：默认非阻塞（关键：让 barge-in 生效）=====
@@ -195,7 +197,7 @@ function stripInputPrefix(text: string) {
 }
 function splitForSpeaker(text: string, maxLen = SPEAK_CHUNK_LEN) {
   const clean = compactText(text);
-  const parts = clean.split(/(?<=[。！？；…\n])/).map((x) => x.trim()).filter(Boolean);
+  const parts = clean.split(/(?<=[。！？；，、,!?;…\n])/).map((x) => x.trim()).filter(Boolean);
 
   const out: string[] = [];
   const src = parts.length ? parts : [clean];
@@ -345,16 +347,16 @@ function estimateSpeakMs(text: string) {
   const t = (text || "").replace(/\s+/g, "");
   const len = t.length;
 
-  // 大约 6~7 字/秒：150~170ms/字
-  let ms = len * 160;
+  // 小爱音箱 TTS 在非阻塞模式下需要保守等待，否则下一段可能抢播导致丢字。
+  let ms = len * SPEAK_MS_PER_CHAR;
 
   // 标点停顿
   ms += (t.match(/[。！？!?]/g) || []).length * 260;
   ms += (t.match(/[，,；;]/g) || []).length * 140;
 
   // 限幅
-  if (ms < 500) ms = 500;
-  if (ms > 8000) ms = 8000;
+  if (ms < 800) ms = 800;
+  if (ms > 12000) ms = 12000;
   return ms;
 }
 
@@ -416,6 +418,12 @@ function startSpeak(engine: any, seq: number, text: string, meta?: string) {
           await stopAISpeaking(engine);
         });
         await Promise.race([sleep(estimateSpeakMs(c)), waitAbort(signal)]).catch(async () => {
+          await stopAISpeaking(engine);
+        });
+      }
+
+      if (SPEAK_CHUNK_GAP_MS > 0) {
+        await Promise.race([sleep(SPEAK_CHUNK_GAP_MS), waitAbort(signal)]).catch(async () => {
           await stopAISpeaking(engine);
         });
       }
