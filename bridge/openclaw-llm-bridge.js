@@ -9,6 +9,7 @@ const port = Number(process.env.OPENCLAW_BRIDGE_PORT || 11435);
 const model = process.env.OPENCLAW_MODEL || "openai/gpt-5.4";
 const token = process.env.OPENCLAW_BRIDGE_TOKEN || "";
 const timeoutMs = Number(process.env.OPENCLAW_TIMEOUT_MS || 60000);
+const openclawBin = process.env.OPENCLAW_BIN || "openclaw";
 
 function send(res, status, body) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -79,7 +80,7 @@ function runOpenClaw(prompt, requestedModel) {
   const selectedModel = requestedModel || model;
   return new Promise((resolve, reject) => {
     execFile(
-      "openclaw",
+      openclawBin,
       ["infer", "model", "run", "--json", "--model", selectedModel, "--prompt", prompt],
       { timeout: timeoutMs, maxBuffer: 1024 * 1024 },
       (err, stdout, stderr) => {
@@ -159,4 +160,3 @@ const server = http.createServer(async (req, res) => {
 server.listen(port, host, () => {
   console.log(`openclaw-llm-bridge listening on http://${host}:${port}/v1 model=${model}`);
 });
-

@@ -15,6 +15,51 @@ need_root() {
   fi
 }
 
+run_user() {
+  if [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER:-}" != "root" ]; then
+    echo "$SUDO_USER"
+  else
+    id -un
+  fi
+}
+
+run_home() {
+  user="$1"
+  if [ "$user" = "$(id -un)" ]; then
+    printf '%s\n' "${HOME:-}"
+    return 0
+  fi
+  awk -F: -v u="$user" '$1 == u { print $6; exit }' /etc/passwd
+}
+
+detect_openclaw_bin() {
+  user="$1"
+  home="$2"
+  if [ -n "${OPENCLAW_BIN:-}" ] && [ -x "$OPENCLAW_BIN" ]; then
+    echo "$OPENCLAW_BIN"
+    return 0
+  fi
+  for candidate in \
+    "$(command -v openclaw 2>/dev/null || true)" \
+    "$home/.npm-global/bin/openclaw" \
+    "$home/.local/bin/openclaw" \
+    "/usr/local/bin/openclaw" \
+    "/usr/bin/openclaw"; do
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  if command -v su >/dev/null 2>&1; then
+    candidate=$(su - "$user" -c 'command -v openclaw 2>/dev/null || true' 2>/dev/null || true)
+    if [ -n "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  fi
+  return 1
+}
+
 fetch() {
   url="$1"
   out="$2"
@@ -50,8 +95,12 @@ install_node_if_needed() {
 
 install_bridge() {
   need_root
-  command -v openclaw >/dev/null 2>&1 || {
-    echo "当前设备找不到 openclaw 命令。这个脚本必须运行在 OpenClaw 所在设备上。" >&2
+  service_user=$(run_user)
+  service_home=$(run_home "$service_user")
+  openclaw_bin=$(detect_openclaw_bin "$service_user" "$service_home") || {
+    echo "当前设备找不到 openclaw 命令。" >&2
+    echo "请确认 OpenClaw 已安装，并且普通用户能执行：command -v openclaw" >&2
+    echo "如果命令在特殊路径，可这样安装：OPENCLAW_BIN=/完整路径/openclaw sudo -E /tmp/xiaoai-openclaw" >&2
     exit 1
   }
   install_node_if_needed
@@ -71,7 +120,10 @@ OPENCLAW_BRIDGE_PORT=${PORT}
 OPENCLAW_MODEL=${MODEL}
 OPENCLAW_BRIDGE_TOKEN=${TOKEN}
 OPENCLAW_TIMEOUT_MS=${OPENCLAW_TIMEOUT_MS:-60000}
+OPENCLAW_BIN=${openclaw_bin}
+HOME=${service_home}
 EOF
+  chown -R "$service_user" "$WORK_DIR"
   chmod 600 "$WORK_DIR/env"
 
   if command -v systemctl >/dev/null 2>&1; then
@@ -84,6 +136,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 EnvironmentFile=${WORK_DIR}/env
+User=${service_user}
+WorkingDirectory=${service_home}
 ExecStart=$(command -v node) ${WORK_DIR}/openclaw-llm-bridge.js
 Restart=always
 RestartSec=3
@@ -94,12 +148,18 @@ EOF
     systemctl daemon-reload
     systemctl enable --now "${APP_NAME}"
   else
-    nohup node "$WORK_DIR/openclaw-llm-bridge.js" >> "$WORK_DIR/bridge.log" 2>&1 &
+    if [ "$service_user" = "$(id -un)" ]; then
+      nohup node "$WORK_DIR/openclaw-llm-bridge.js" >> "$WORK_DIR/bridge.log" 2>&1 &
+    else
+      su - "$service_user" -c "OPENCLAW_BIN='$openclaw_bin' OPENCLAW_MODEL='$MODEL' OPENCLAW_BRIDGE_HOST='$HOST' OPENCLAW_BRIDGE_PORT='$PORT' OPENCLAW_TIMEOUT_MS='${OPENCLAW_TIMEOUT_MS:-60000}' nohup node '$WORK_DIR/openclaw-llm-bridge.js' >> '$WORK_DIR/bridge.log' 2>&1 &"
+    fi
   fi
 
   ip_addr=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' || true)
   [ -n "$ip_addr" ] || ip_addr="OpenClaw设备IP"
   echo "OpenClaw bridge 已启动: http://${ip_addr}:${PORT}/v1"
+  echo "运行用户: ${service_user}"
+  echo "OpenClaw 命令: ${openclaw_bin}"
   echo "MiGPT 服务器 .env 里设置：OPENAI_BASE_URL=http://${ip_addr}:${PORT}/v1"
   if [ -n "$TOKEN" ]; then
     echo "MiGPT 服务器 .env 里设置：OPENAI_API_KEY=${TOKEN}"
