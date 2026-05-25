@@ -72,6 +72,12 @@ SERVER_IP=192.168.2.1 xiaoai-openclaw
 
 配置文件在 `/opt/xiaoai-openclaw/.env`，改完后用菜单 `5) 重启/重建服务器端 Docker（修改配置后用）`。
 
+默认保留最近 6 轮上下文，连续追问会接上前面的内容。需要关闭时改：
+
+```env
+CONVERSATION_TURNS=0
+```
+
 ## OpenClaw
 
 OpenClaw 不在 MiGPT 同一台设备时，在 OpenClaw 设备运行：
@@ -136,6 +142,7 @@ OLLAMA_BASE_URL=http://192.168.2.193:11434/v1 OLLAMA_MODEL=qwen3:4b xiaoai-openc
 切换openai
 切换谷歌
 测试模型
+清空上下文
 停止
 闭嘴
 ```

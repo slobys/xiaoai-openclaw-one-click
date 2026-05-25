@@ -19,6 +19,7 @@ type OpenAIResponsesResponse = {
 };
 
 type Provider = "deepseek" | "openai" | "gemini" | "openclaw" | "ollama";
+type ChatMessage = { role: "user" | "assistant"; content: string };
 
 // ====== 可调参数 ======
 function envInt(name: string, fallback: number) {
@@ -26,12 +27,18 @@ function envInt(name: string, fallback: number) {
   const n = Number.parseInt(raw, 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
+function envNonNegativeInt(name: string, fallback: number) {
+  const raw = process.env[name] || "";
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
 
 const LLM_TIMEOUT_MS = envInt("LLM_TIMEOUT_MS", 20000);
 const TEST_TIMEOUT_MS = envInt("TEST_TIMEOUT_MS", 6000);
 const OPENCLAW_TIMEOUT_MS = envInt("OPENCLAW_TIMEOUT_MS", 90000);
 const OPENCLAW_TEST_TIMEOUT_MS = envInt("OPENCLAW_TEST_TIMEOUT_MS", 30000);
 const OLLAMA_TIMEOUT_MS = envInt("OLLAMA_TIMEOUT_MS", 90000);
+const CONVERSATION_TURNS = envNonNegativeInt("CONVERSATION_TURNS", 6);
 const SPEAK_CHUNK_LEN = envInt("SPEAK_CHUNK_LEN", 28);
 const SPEAK_MS_PER_CHAR = envInt("SPEAK_MS_PER_CHAR", 220);
 const SPEAK_CHUNK_GAP_MS = envInt("SPEAK_CHUNK_GAP_MS", 260);
@@ -112,6 +119,12 @@ const diag =
     },
   };
 (globalThis as any).__open_xiaoai_diag_state = diag;
+
+// ===== 短上下文：让连续追问能接上上一句 =====
+const conversationState =
+  (globalThis as any).__open_xiaoai_conversation_state ||
+  { messages: [] as ChatMessage[] };
+(globalThis as any).__open_xiaoai_conversation_state = conversationState;
 
 // --------- 会话状态：用于取消旧请求/旧播报 ----------
 const state =
@@ -227,6 +240,19 @@ function timeoutForProvider(p: Provider, baseTimeoutMs: number) {
 }
 function providerDisplayName(p: Provider) {
   return p === "openclaw" ? "open" : p;
+}
+function clearConversation() {
+  conversationState.messages = [];
+}
+function recentConversation() {
+  if (CONVERSATION_TURNS <= 0) return [] as ChatMessage[];
+  return conversationState.messages.slice(-CONVERSATION_TURNS * 2);
+}
+function addConversationTurn(user: string, assistant: string) {
+  if (CONVERSATION_TURNS <= 0) return;
+  conversationState.messages.push({ role: "user", content: compactText(user) });
+  conversationState.messages.push({ role: "assistant", content: compactText(assistant) });
+  conversationState.messages = conversationState.messages.slice(-CONVERSATION_TURNS * 2);
 }
 
 // ===== 强力停播（关键）=====
@@ -472,16 +498,23 @@ async function httpPostJson(url: string, headers: Record<string, string>, body: 
 }
 
 // ===== Gemini =====
-async function chatGemini(opts: { apiKey: string; model: string; system: string; user: string; signal?: AbortSignal }) {
+async function chatGemini(opts: { apiKey: string; model: string; system: string; history?: ChatMessage[]; user: string; signal?: AbortSignal }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:generateContent?key=${encodeURIComponent(
     opts.apiKey
   )}`;
+  const contents = [
+    ...(opts.history || []).map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    })),
+    { role: "user", parts: [{ text: opts.user }] },
+  ];
   const { ok, status, json } = await httpPostJson(
     url,
     { "Content-Type": "application/json" },
     {
       systemInstruction: { parts: [{ text: opts.system }] },
-      contents: [{ role: "user", parts: [{ text: opts.user }] }],
+      contents,
       generationConfig: { temperature: 0.7 },
     },
     opts.signal
@@ -498,6 +531,7 @@ async function chatOpenAICompat(opts: {
   apiKey: string;
   model: string;
   system: string;
+  history?: ChatMessage[];
   user: string;
   signal?: AbortSignal;
 }) {
@@ -512,6 +546,7 @@ async function chatOpenAICompat(opts: {
       temperature: 0.7,
       messages: [
         { role: "system", content: opts.system },
+        ...(opts.history || []),
         { role: "user", content: opts.user },
       ],
     },
@@ -543,6 +578,7 @@ async function openaiResponses(opts: {
   apiKey: string;
   model: string;
   system: string;
+  history?: ChatMessage[];
   user: string;
   signal?: AbortSignal;
 }) {
@@ -553,6 +589,7 @@ async function openaiResponses(opts: {
     model: opts.model,
     input: [
       { role: "system", content: opts.system },
+      ...(opts.history || []),
       { role: "user", content: opts.user },
     ],
     temperature: 0.7,
@@ -593,7 +630,7 @@ function isModelErr(msg: string) {
   );
 }
 
-async function callOpenAIWithFallback(opts: { model: string; system: string; user: string; signal: AbortSignal }) {
+async function callOpenAIWithFallback(opts: { model: string; system: string; history?: ChatMessage[]; user: string; signal: AbortSignal }) {
   const models = [opts.model, ...(DEFAULT_MODELS.openai.fallbacks || [])].filter(Boolean);
   let lastErr: any = null;
 
@@ -604,6 +641,7 @@ async function callOpenAIWithFallback(opts: { model: string; system: string; use
         apiKey: KEYS.OPENAI,
         model: m,
         system: opts.system,
+        history: opts.history,
         user: opts.user,
         signal: opts.signal,
       });
@@ -617,13 +655,13 @@ async function callOpenAIWithFallback(opts: { model: string; system: string; use
   throw lastErr || new Error("openai model failed");
 }
 
-async function callGeminiWithFallback(opts: { model: string; system: string; user: string; signal: AbortSignal }) {
+async function callGeminiWithFallback(opts: { model: string; system: string; history?: ChatMessage[]; user: string; signal: AbortSignal }) {
   const models = llmState.modelOverride ? [opts.model] : [opts.model, ...(DEFAULT_MODELS.gemini.fallbacks || [])].filter(Boolean);
   let lastErr: any = null;
 
   for (const m of models) {
     try {
-      const text = await chatGemini({ apiKey: KEYS.GEMINI, model: m, system: opts.system, user: opts.user, signal: opts.signal });
+      const text = await chatGemini({ apiKey: KEYS.GEMINI, model: m, system: opts.system, history: opts.history, user: opts.user, signal: opts.signal });
       return { text, usedModel: m };
     } catch (e: any) {
       const msg = String(e?.message || "");
@@ -634,11 +672,11 @@ async function callGeminiWithFallback(opts: { model: string; system: string; use
   throw lastErr || new Error("gemini model failed");
 }
 
-async function callLLM(provider: Provider, model: string, system: string, userText: string, signal: AbortSignal) {
+async function callLLM(provider: Provider, model: string, system: string, userText: string, signal: AbortSignal, history: ChatMessage[] = []) {
   if (provider === "openclaw") {
     if (!DEFAULT_MODELS.openclaw.baseURL) throw new Error("OPENCLAW_BASE_URL 未配置");
     if (!KEYS.OPENCLAW) throw new Error("OPENCLAW_API_KEY 未配置");
-    const text = await openaiResponses({ baseURL: DEFAULT_MODELS.openclaw.baseURL!, apiKey: KEYS.OPENCLAW, model, system, user: userText, signal });
+    const text = await openaiResponses({ baseURL: DEFAULT_MODELS.openclaw.baseURL!, apiKey: KEYS.OPENCLAW, model, system, history, user: userText, signal });
     return { text, usedModel: model };
   }
 
@@ -649,6 +687,7 @@ async function callLLM(provider: Provider, model: string, system: string, userTe
       apiKey: KEYS.OLLAMA,
       model,
       system,
+      history,
       user: userText,
       signal,
     });
@@ -658,25 +697,26 @@ async function callLLM(provider: Provider, model: string, system: string, userTe
   if (provider === "openai") {
     if (!KEYS.OPENAI) throw new Error("OPENAI_API_KEY 未配置");
     if (llmState.modelOverride) {
-      const text = await openaiResponses({ baseURL: DEFAULT_MODELS.openai.baseURL!, apiKey: KEYS.OPENAI, model, system, user: userText, signal });
+      const text = await openaiResponses({ baseURL: DEFAULT_MODELS.openai.baseURL!, apiKey: KEYS.OPENAI, model, system, history, user: userText, signal });
       return { text, usedModel: model };
     }
-    return callOpenAIWithFallback({ model, system, user: userText, signal });
+    return callOpenAIWithFallback({ model, system, history, user: userText, signal });
   }
 
   if (provider === "gemini") {
     if (!KEYS.GEMINI) throw new Error("GEMINI_API_KEY 未配置");
-    return callGeminiWithFallback({ model, system, user: userText, signal });
+    return callGeminiWithFallback({ model, system, history, user: userText, signal });
   }
 
   if (!KEYS.DEEPSEEK) throw new Error("DEEPSEEK_API_KEY 未配置");
-  const text = await chatOpenAICompat({ baseURL: DEFAULT_MODELS.deepseek.baseURL!, apiKey: KEYS.DEEPSEEK, model, system, user: userText, signal });
+  const text = await chatOpenAICompat({ baseURL: DEFAULT_MODELS.deepseek.baseURL!, apiKey: KEYS.DEEPSEEK, model, system, history, user: userText, signal });
   return { text, usedModel: model };
 }
 
 function doSwitchProvider(p: Provider) {
   llmState.provider = p;
   llmState.modelOverride = "";
+  clearConversation();
   const dm = DEFAULT_MODELS[p].model;
   const keyHint = hasKeyFor(p) ? "" : "（提示：未配置API Key，调用会失败）";
   return `已切换：${providerDisplayName(p)}（默认模型：${dm}）。${keyHint}`;
@@ -715,6 +755,7 @@ export const kOpenXiaoAIConfig = {
       cmd.startsWith("切换") || raw.startsWith("设置模型") ||
       cmd === "测试模型" || cmd === "测试当前模型" ||
       cmd === "停止" || cmd === "闭嘴" ||
+      cmd === "清空上下文" || cmd === "清除上下文" || cmd === "清空对话" ||
       cmd === "开启输出" || cmd === "关闭输出" ||
       cmd === "开启详细输出" || cmd === "关闭详细输出" ||
       cmd === "开启问题显示" || cmd === "开启q" ||
@@ -793,15 +834,22 @@ export const kOpenXiaoAIConfig = {
       startSpeak(engine, mySeq, "好的。");
       return { handled: true };
     }
+    if (cmd === "清空上下文" || cmd === "清除上下文" || cmd === "清空对话") {
+      clearConversation();
+      startSpeak(engine, mySeq, "已清空上下文。");
+      return { handled: true };
+    }
 
     // ===== 模式切换 =====
     if (cmd === "开启小爱" || cmd === "切换小爱" || cmd === "原生模式" || cmd === "原生小爱") {
       modeState.mode = "native";
+      clearConversation();
       startSpeak(engine, mySeq, "已切换到原生小爱模式。");
       return { handled: true };
     }
     if (cmd === "开启ai" || cmd === "切换ai" || cmd === "ai模式") {
       modeState.mode = "ai";
+      clearConversation();
       startSpeak(engine, mySeq, "已切换到AI模式。");
       return { handled: true };
     }
@@ -931,11 +979,12 @@ export const kOpenXiaoAIConfig = {
 
     const sys = buildSystem(cur.provider, cur.model);
     const userText = mergeAddon(effectiveRaw);
+    const history = recentConversation();
 
     (async () => {
       const t0 = nowMs();
       try {
-        const r = await callLLM(cur.provider, cur.model, sys, userText, controller.signal);
+        const r = await callLLM(cur.provider, cur.model, sys, userText, controller.signal, history);
         clearTimeout(timer);
         if (mySeq !== state.seq) return;
 
@@ -943,6 +992,7 @@ export const kOpenXiaoAIConfig = {
 
         const ms = nowMs() - t0;
         const answer = compactText(r.text) || "我没听清，你能再说一次吗？";
+        addConversationTurn(userText, answer);
         startSpeak(engine, mySeq, answer, `[${providerDisplayName(cur.provider)}/${r.usedModel} ${ms}ms]`);
       } catch (e: any) {
         clearTimeout(timer);

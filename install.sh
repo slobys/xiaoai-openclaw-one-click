@@ -176,6 +176,7 @@ write_env_if_missing() {
     append_env_if_missing "$env_file" "SPEAK_CHUNK_LEN" "${SPEAK_CHUNK_LEN:-28}"
     append_env_if_missing "$env_file" "SPEAK_MS_PER_CHAR" "${SPEAK_MS_PER_CHAR:-220}"
     append_env_if_missing "$env_file" "SPEAK_CHUNK_GAP_MS" "${SPEAK_CHUNK_GAP_MS:-260}"
+    append_env_if_missing "$env_file" "CONVERSATION_TURNS" "${CONVERSATION_TURNS:-6}"
     append_env_if_missing "$env_file" "OLLAMA_BASE_URL" "${OLLAMA_BASE_URL:-http://192.168.2.193:11434/v1}"
     append_env_if_missing "$env_file" "OLLAMA_MODEL" "${OLLAMA_MODEL:-qwen3:4b}"
     remove_env_key "$env_file" "PREFIX_GATE_MODE"
@@ -190,6 +191,7 @@ write_env_if_missing() {
     update_env_if_provided "$env_file" "SPEAK_CHUNK_LEN" "${SPEAK_CHUNK_LEN:-}"
     update_env_if_provided "$env_file" "SPEAK_MS_PER_CHAR" "${SPEAK_MS_PER_CHAR:-}"
     update_env_if_provided "$env_file" "SPEAK_CHUNK_GAP_MS" "${SPEAK_CHUNK_GAP_MS:-}"
+    update_env_if_provided "$env_file" "CONVERSATION_TURNS" "${CONVERSATION_TURNS:-}"
     update_env_if_provided "$env_file" "OLLAMA_BASE_URL" "${OLLAMA_BASE_URL:-}"
     update_env_if_provided "$env_file" "OLLAMA_MODEL" "${OLLAMA_MODEL:-}"
     update_env_if_blank_or_value "$env_file" "OPENCLAW_BASE_URL" "http://192.168.2.238:11435/v1" ""
@@ -210,6 +212,8 @@ write_env_if_missing() {
     printf 'GEMINI_API_KEY=%s\n' "${GEMINI_API_KEY:-}"
     printf '# OPENAI_BASE_URL：OpenAI 接口地址；兼容服务可改成自己的 /v1 地址。\n'
     printf 'OPENAI_BASE_URL=%s\n' "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
+    printf '# CONVERSATION_TURNS：连续对话保留轮数；0 表示不保留上下文。\n'
+    printf 'CONVERSATION_TURNS=%s\n' "${CONVERSATION_TURNS:-6}"
     printf '\n'
     printf '# OPENCLAW_BASE_URL：OpenClaw API Bridge 地址；OpenClaw 在另一台设备时改成 http://OpenClaw设备IP:11435/v1。\n'
     printf 'OPENCLAW_BASE_URL=%s\n' "${OPENCLAW_BASE_URL:-http://192.168.2.238:11435/v1}"
@@ -247,6 +251,7 @@ annotate_env_file() {
       note["OPENAI_API_KEY"] = "OpenAI 官方或兼容接口 API Key；说“切换 openai”后使用。"
       note["GEMINI_API_KEY"] = "Gemini API Key；说“切换 gemini”后使用。"
       note["OPENAI_BASE_URL"] = "OpenAI 接口地址；兼容服务可改成自己的 /v1 地址。"
+      note["CONVERSATION_TURNS"] = "连续对话保留轮数；0 表示不保留上下文。"
       note["OPENCLAW_BASE_URL"] = "OpenClaw API Bridge 地址；OpenClaw 在另一台设备时改成 http://OpenClaw设备IP:11435/v1。"
       note["OPENCLAW_API_KEY"] = "OpenClaw API Bridge 鉴权 Key；需和 Bridge 的 OPENCLAW_BRIDGE_TOKEN 一致，默认本地测试可用 xiaoai-local。"
       note["OPENCLAW_DISPLAY_MODEL"] = "语音里显示/切换用的模型名；默认说“切换 open”即可使用 OpenClaw。"
@@ -259,14 +264,14 @@ annotate_env_file() {
       note["OLLAMA_MODEL"] = "Ollama 模型名；必须和 ollama list 里的模型名一致，说“切换 ollama”后使用。"
     }
     /^# ===== 参数说明 =====/ { skip_notes = 1; next }
-    skip_notes && /^# (DEEPSEEK_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_BASE_URL|OPENCLAW_BASE_URL|OPENCLAW_API_KEY|OPENCLAW_DISPLAY_MODEL|OPENCLAW_TIMEOUT_MS|OPENCLAW_TEST_TIMEOUT_MS|SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|PREFIX_GATE_MODE|OLLAMA_BASE_URL|OLLAMA_MODEL)：/ { next }
+    skip_notes && /^# (DEEPSEEK_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_BASE_URL|CONVERSATION_TURNS|OPENCLAW_BASE_URL|OPENCLAW_API_KEY|OPENCLAW_DISPLAY_MODEL|OPENCLAW_TIMEOUT_MS|OPENCLAW_TEST_TIMEOUT_MS|SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|PREFIX_GATE_MODE|OLLAMA_BASE_URL|OLLAMA_MODEL)：/ { next }
     skip_notes && /^$/ { next }
     skip_notes { skip_notes = 0 }
     /^# ===== (API Key 配置|OpenClaw 配置|小爱播报配置|Ollama 配置) =====/ { next }
     /^# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为:/ { next }
     /^# 如果 Ollama 在局域网电脑，OLLAMA_BASE_URL 设置为:/ { next }
-    /^# (DeepSeek 官方 API Key|OpenAI 官方或兼容接口 API Key|Gemini API Key|OpenAI 接口地址|OpenClaw API Bridge 地址|OpenClaw API Bridge 鉴权 Key|语音里显示\/切换用的模型名|OpenClaw 正常问答超时时间|“测试模型”命令的超时时间|每段最多字符数|每个字预估播报耗时|每段播报之间的额外间隔|前缀识别方式|Ollama OpenAI 兼容地址|Ollama 模型名)/ { next }
-    /^# (DEEPSEEK_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_BASE_URL|OPENCLAW_BASE_URL|OPENCLAW_API_KEY|OPENCLAW_DISPLAY_MODEL|OPENCLAW_TIMEOUT_MS|OPENCLAW_TEST_TIMEOUT_MS|SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|PREFIX_GATE_MODE|OLLAMA_BASE_URL|OLLAMA_MODEL)：/ { next }
+    /^# (DeepSeek 官方 API Key|OpenAI 官方或兼容接口 API Key|Gemini API Key|OpenAI 接口地址|连续对话保留轮数|OpenClaw API Bridge 地址|OpenClaw API Bridge 鉴权 Key|语音里显示\/切换用的模型名|OpenClaw 正常问答超时时间|“测试模型”命令的超时时间|每段最多字符数|每个字预估播报耗时|每段播报之间的额外间隔|前缀识别方式|Ollama OpenAI 兼容地址|Ollama 模型名)/ { next }
+    /^# (DEEPSEEK_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_BASE_URL|CONVERSATION_TURNS|OPENCLAW_BASE_URL|OPENCLAW_API_KEY|OPENCLAW_DISPLAY_MODEL|OPENCLAW_TIMEOUT_MS|OPENCLAW_TEST_TIMEOUT_MS|SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|PREFIX_GATE_MODE|OLLAMA_BASE_URL|OLLAMA_MODEL)：/ { next }
     /^[A-Z0-9_]+=/ {
       key = $0
       sub(/=.*/, "", key)
