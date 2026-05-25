@@ -95,6 +95,7 @@ ollama list
 ```sh
 OLLAMA_BASE_URL=http://192.168.2.100:11434/v1
 OLLAMA_MODEL=gemma3:4b
+OLLAMA_TIMEOUT_MS=90000
 ```
 
 然后重建 MiGPT server 容器：
@@ -112,7 +113,7 @@ xiaoai-openclaw
 也可以在运行菜单时直接传入配置，脚本会覆盖 `/opt/xiaoai-openclaw/.env` 里的旧 Ollama 值：
 
 ```sh
-OLLAMA_BASE_URL=http://192.168.2.100:11434/v1 OLLAMA_MODEL=gemma3:4b xiaoai-openclaw
+OLLAMA_BASE_URL=http://192.168.2.100:11434/v1 OLLAMA_MODEL=gemma3:4b OLLAMA_TIMEOUT_MS=90000 xiaoai-openclaw
 ```
 
 对小爱说：

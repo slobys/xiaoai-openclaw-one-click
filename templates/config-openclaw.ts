@@ -21,8 +21,15 @@ type OpenAIResponsesResponse = {
 type Provider = "deepseek" | "openai" | "gemini" | "openclaw" | "ollama";
 
 // ====== 可调参数 ======
-const LLM_TIMEOUT_MS = 20000;
-const TEST_TIMEOUT_MS = 6000;
+function envInt(name: string, fallback: number) {
+  const raw = process.env[name] || "";
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+const LLM_TIMEOUT_MS = envInt("LLM_TIMEOUT_MS", 20000);
+const TEST_TIMEOUT_MS = envInt("TEST_TIMEOUT_MS", 6000);
+const OLLAMA_TIMEOUT_MS = envInt("OLLAMA_TIMEOUT_MS", 90000);
 const SPEAK_CHUNK_LEN = 45;
 const HARD_ABORT_RECOVERY_MS = 1400;
 
@@ -234,6 +241,9 @@ function hasKeyFor(p: Provider) {
   if (p === "openclaw") return !!DEFAULT_MODELS.openclaw.baseURL && !!KEYS.OPENCLAW;
   if (p === "ollama") return !!DEFAULT_MODELS.ollama.baseURL;
   return !!KEYS.DEEPSEEK;
+}
+function timeoutForProvider(p: Provider, baseTimeoutMs: number) {
+  return p === "ollama" ? OLLAMA_TIMEOUT_MS : baseTimeoutMs;
 }
 function providerDisplayName(p: Provider) {
   return p === "openclaw" ? "open" : p;
@@ -893,7 +903,12 @@ export const kOpenXiaoAIConfig = {
       }
 
       const ctrl = new AbortController();
-      const timer = setTimeout(() => { try { ctrl.abort(); } catch {} }, TEST_TIMEOUT_MS);
+      const timeoutMs = timeoutForProvider(cur.provider, TEST_TIMEOUT_MS);
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        try { ctrl.abort(); } catch {}
+      }, timeoutMs);
 
       (async () => {
         const t0 = nowMs();
@@ -913,7 +928,11 @@ export const kOpenXiaoAIConfig = {
           const msg = String(e?.message || "unknown_error");
           diag.last = { provider: cur.provider, model: cur.model, ok: false, ms: nowMs() - t0, at: nowMs(), err: msg };
           logE(msg);
-          startSpeak(engine, mySeq, `连通失败：${providerDisplayName(cur.provider)}/${cur.model}，原因：${msg}`);
+          if (timedOut) {
+            startSpeak(engine, mySeq, `连通超时：${providerDisplayName(cur.provider)}/${cur.model} 超过 ${Math.round(timeoutMs / 1000)} 秒没有返回。`);
+          } else {
+            startSpeak(engine, mySeq, `连通失败：${providerDisplayName(cur.provider)}/${cur.model}，原因：${msg}`);
+          }
         }
       })();
 
@@ -937,7 +956,12 @@ export const kOpenXiaoAIConfig = {
     const controller = new AbortController();
     state.controller = controller;
 
-    const timer = setTimeout(() => { try { controller.abort(); } catch {} }, LLM_TIMEOUT_MS);
+    const timeoutMs = timeoutForProvider(cur.provider, LLM_TIMEOUT_MS);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { controller.abort(); } catch {}
+    }, timeoutMs);
 
     const sys = buildSystem(cur.provider, cur.model);
     const userText = mergeAddon(raw);
@@ -959,7 +983,12 @@ export const kOpenXiaoAIConfig = {
         if (mySeq !== state.seq) return;
 
         const msg = String(e?.message || "");
-        if (msg.includes("aborted") || msg.includes("Abort") || msg.includes("The operation was aborted")) return;
+        if (msg.includes("aborted") || msg.includes("Abort") || msg.includes("The operation was aborted")) {
+          if (timedOut) {
+            startSpeak(engine, mySeq, `调用超时：${providerDisplayName(cur.provider)}/${cur.model} 超过 ${Math.round(timeoutMs / 1000)} 秒没有返回。`);
+          }
+          return;
+        }
 
         logE(msg);
         startSpeak(engine, mySeq, `调用失败（${providerDisplayName(cur.provider)}/${cur.model}）：${msg}`);
