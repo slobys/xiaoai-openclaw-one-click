@@ -146,7 +146,8 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
-    systemctl enable --now "${APP_NAME}"
+    systemctl enable "${APP_NAME}"
+    systemctl restart "${APP_NAME}"
   else
     if [ "$service_user" = "$(id -un)" ]; then
       nohup node "$WORK_DIR/openclaw-llm-bridge.js" >> "$WORK_DIR/bridge.log" 2>&1 &
