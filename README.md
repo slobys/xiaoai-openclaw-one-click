@@ -22,6 +22,8 @@ curl -fsSL https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/ma
 
 ```sh
 curl -fsSL https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/bootstrap.sh -o /usr/bin/xiaoai-openclaw && chmod +x /usr/bin/xiaoai-openclaw && xiaoai-openclaw
+
+如果 GitHub raw 在你的网络里经常 `TLS connect error`，优先用这条 Gitee 命令。
 ```
 
 完整项目方式：
@@ -233,3 +235,5 @@ sh install.sh --server-only
 ## 已知边界
 
 Open-XiaoAI 上游仓库已在 2026-04-04 归档停止维护，但 Docker 镜像和 client artifact 仍可用。这个一键项目会尽量只做部署编排，不改刷机流程。
+
+首次部署服务器端时，`idootop/open-xiaoai-migpt:latest` 需要从 Docker Hub 首次拉取并解压，软路由/NAS 上可能明显偏慢；如果你手动删掉了容器和镜像，下一次安装会重新走完整下载。

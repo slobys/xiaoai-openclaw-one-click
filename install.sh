@@ -6,7 +6,8 @@ WORK_DIR="/opt/${APP_NAME}"
 CONTAINER_NAME="${APP_NAME}"
 PORT="${XIAOAI_OPENCLAW_PORT:-4399}"
 CONFIG_URL="${XIAOAI_CONFIG_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/templates/config-openclaw.ts}"
-CONFIG_CN_URL="${XIAOAI_CONFIG_CN_URL:-https://gh-proxy.com/https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/templates/config-openclaw.ts}"
+CONFIG_CN_URL="${XIAOAI_CONFIG_CN_URL:-https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/templates/config-openclaw.ts}"
+CONFIG_PROXY_URL="${XIAOAI_CONFIG_PROXY_URL:-https://gh-proxy.com/https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/templates/config-openclaw.ts}"
 CLIENT_INIT_URL="${XIAOAI_CLIENT_INIT_URL:-https://gitee.com/idootop/artifacts/releases/download/open-xiaoai-client/init.sh}"
 CLIENT_BOOT_URL="${XIAOAI_CLIENT_BOOT_URL:-https://gitee.com/idootop/artifacts/releases/download/open-xiaoai-client/boot.sh}"
 
@@ -74,6 +75,24 @@ fetch_with_fallback() {
   fi
   log "主下载失败，尝试备用地址..."
   fetch "$fallback" "$out"
+}
+
+fetch_with_fallback_chain() {
+  out="$1"
+  shift
+  first=1
+  for url in "$@"; do
+    if fetch "$url" "$out"; then
+      return 0
+    fi
+    if [ "$first" -eq 1 ]; then
+      log "主下载失败，尝试备用地址..."
+      first=0
+    else
+      log "备用地址失败，继续尝试下一地址..."
+    fi
+  done
+  die "下载失败: $out"
 }
 
 cache_bust_url() {
@@ -223,10 +242,14 @@ install_server() {
   need_root
   mkdir -p "$WORK_DIR"
   install_docker_if_needed
-  fetch_with_fallback "$(cache_bust_url "$CONFIG_URL")" "$(cache_bust_url "$CONFIG_CN_URL")" "$WORK_DIR/config.ts"
+  fetch_with_fallback_chain "$WORK_DIR/config.ts" \
+    "$(cache_bust_url "$CONFIG_URL")" \
+    "$(cache_bust_url "$CONFIG_CN_URL")" \
+    "$(cache_bust_url "$CONFIG_PROXY_URL")"
   write_env_if_missing
 
   log "拉取并启动 Docker 容器..."
+  log "首次拉取 idootop/open-xiaoai-migpt:latest 会下载并解压多层镜像，在软路由/NAS 上可能持续几分钟。"
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
   docker run -d \
     --name "$CONTAINER_NAME" \
