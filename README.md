@@ -127,7 +127,7 @@ xiaoai-openclaw
 菜单选：
 
 ```text
-1) 一键部署服务器端 Docker
+5) 重启/重建服务器端 Docker（修改配置后用）
 ```
 
 也可以在运行菜单时直接传入配置，脚本会覆盖 `/opt/xiaoai-openclaw/.env` 里的旧 Ollama 值：
@@ -199,7 +199,7 @@ xiaoai-openclaw
 直接执行命令也可以：
 
 ```sh
-sh install.sh --server-only
+sh install.sh --restart
 ```
 
 注意：`docker restart xiaoai-openclaw` 不会重新读取 `--env-file`，改过 `/opt/xiaoai-openclaw/.env` 后必须重建容器。
@@ -215,6 +215,25 @@ sh install.sh --server-only
 `openclaw-llm-bridge` 同时兼容 `/v1/responses` 和 `/v1/chat/completions`。`slobys/xiaoai` 的 OpenAI 分支默认会调用 `/responses`，所以这里重点支持了 Responses 格式。健康检查可用 `curl http://OpenClaw设备IP:11435/health`，正常会返回 `mode`、`model` 和 `sessionKey`。
 
 安全建议：bridge 默认只适合局域网。公网使用必须套内网 VPN / Tailscale / 防火墙白名单，或者设置 `OPENCLAW_BRIDGE_TOKEN`。
+
+## 运维菜单
+
+修改 `/opt/xiaoai-openclaw/.env` 或 `/opt/xiaoai-openclaw/config.ts` 后，在软路由/iStoreOS 上运行 `xiaoai-openclaw`，选择：
+
+```text
+5) 重启/重建服务器端 Docker（修改配置后用）
+```
+
+它会保留配置文件，只重建 `xiaoai-openclaw` 容器，让新的 `.env` 和 `config.ts` 生效。
+
+在 OpenClaw/NAS 设备上测试 bridge 时，可以运行 `xiaoai-openclaw` 后选择：
+
+```text
+9) 重启 OpenClaw API Bridge（在 OpenClaw 设备运行）
+10) 清理 OpenClaw API Bridge（在 OpenClaw 设备运行）
+```
+
+清理 bridge 只会删除 `/opt/openclaw-llm-bridge` 和对应服务，不会删除 OpenClaw 主程序。
 
 ## 安装后文件
 

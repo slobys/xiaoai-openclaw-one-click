@@ -203,15 +203,47 @@ EOF
   fi
 }
 
+restart_bridge() {
+  need_root
+  if command -v systemctl >/dev/null 2>&1 && [ -f "/etc/systemd/system/${APP_NAME}.service" ]; then
+    systemctl restart "$APP_NAME"
+    echo "OpenClaw bridge 已重启。"
+    return 0
+  fi
+
+  stop_existing_bridge
+  if [ ! -f "$WORK_DIR/env" ] || [ ! -f "$WORK_DIR/openclaw-llm-bridge.js" ]; then
+    echo "OpenClaw bridge 未安装，正在执行安装..."
+    install_bridge
+    return 0
+  fi
+
+  set -a
+  . "$WORK_DIR/env"
+  set +a
+  nohup node "$WORK_DIR/openclaw-llm-bridge.js" >> "$WORK_DIR/bridge.log" 2>&1 &
+  echo "OpenClaw bridge 已重启。"
+}
+
+uninstall_bridge() {
+  need_root
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl disable --now "$APP_NAME" 2>/dev/null || true
+  fi
+  stop_existing_bridge
+  rm -f /etc/systemd/system/${APP_NAME}.service
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload 2>/dev/null || true
+  fi
+  rm -rf "$WORK_DIR"
+  echo "OpenClaw bridge 已清理。OpenClaw 主程序未改动。"
+}
+
 case "${1:-install}" in
   install) install_bridge ;;
+  restart) restart_bridge ;;
   status) systemctl status "$APP_NAME" 2>/dev/null || ps | grep openclaw-llm-bridge | grep -v grep || true ;;
   logs) journalctl -u "$APP_NAME" -f 2>/dev/null || tail -f "$WORK_DIR/bridge.log" ;;
-  uninstall)
-    need_root
-    systemctl disable --now "$APP_NAME" 2>/dev/null || true
-    rm -f /etc/systemd/system/${APP_NAME}.service
-    rm -rf "$WORK_DIR"
-    ;;
-  *) echo "用法: sh install-openclaw-bridge.sh [install|status|logs|uninstall]" ;;
+  uninstall|clean) uninstall_bridge ;;
+  *) echo "用法: sh install-openclaw-bridge.sh [install|restart|status|logs|uninstall|clean]" ;;
 esac

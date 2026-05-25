@@ -26,6 +26,7 @@ usage() {
   sh install.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
   sh install.sh --status
   sh install.sh --logs
+  sh install.sh --restart
   sh install.sh --uninstall
 EOF
 }
@@ -37,6 +38,7 @@ while [ "$#" -gt 0 ]; do
     --all) MODE="all" ;;
     --status) MODE="status" ;;
     --logs) MODE="logs" ;;
+    --restart|--recreate) MODE="restart" ;;
     --uninstall) MODE="uninstall" ;;
     --speaker-ip) shift; SPEAKER_IP="${1:-}" ;;
     --server-ip) shift; SERVER_IP="${1:-}" ;;
@@ -270,6 +272,27 @@ install_server() {
   log "配置目录: $WORK_DIR"
 }
 
+start_server_from_existing_config() {
+  need_root
+  install_docker_if_needed
+  [ -f "$WORK_DIR/.env" ] || die "缺少 $WORK_DIR/.env，请先部署服务器端"
+  [ -f "$WORK_DIR/config.ts" ] || die "缺少 $WORK_DIR/config.ts，请先部署服务器端"
+
+  log "正在重建 Docker 容器以加载最新配置..."
+  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  docker run -d \
+    --name "$CONTAINER_NAME" \
+    --restart unless-stopped \
+    -p "${PORT}:4399" \
+    --env-file "$WORK_DIR/.env" \
+    -v "$WORK_DIR/config.ts:/app/config.ts:ro" \
+    idootop/open-xiaoai-migpt:latest >/dev/null
+
+  detect_server_ip
+  log "服务器端已重建: ws://${SERVER_IP}:${PORT}"
+  log "已加载配置: $WORK_DIR/.env 和 $WORK_DIR/config.ts"
+}
+
 ask_client_inputs() {
   if [ -z "$SPEAKER_IP" ]; then
     printf "请输入小爱音箱 IP: "
@@ -329,6 +352,7 @@ case "$MODE" in
   all) install_server; install_client ;;
   status) show_status ;;
   logs) show_logs ;;
+  restart) start_server_from_existing_config ;;
   uninstall) uninstall_server ;;
   *) usage; exit 1 ;;
 esac
