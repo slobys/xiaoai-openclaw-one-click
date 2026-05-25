@@ -81,6 +81,22 @@ cache_bust_url() {
   esac
 }
 
+detect_lan_ip() {
+  if command -v ip >/dev/null 2>&1; then
+    ip -o -4 addr show scope global 2>/dev/null | awk '
+      $2 ~ /^(docker|br-|veth|tailscale|tun|wg)/ { next }
+      {
+        split($4, a, "/")
+        ip = a[1]
+        if (ip ~ /^10\./ || ip ~ /^192\.168\./ || ip ~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./) {
+          print ip
+          exit
+        }
+      }
+    '
+  fi
+}
+
 detect_source_file() {
   script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
   if [ -f "$script_dir/bridge/openclaw-llm-bridge.js" ]; then
@@ -189,7 +205,8 @@ EOF
     fi
   fi
 
-  ip_addr=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' || true)
+  ip_addr=$(detect_lan_ip || true)
+  [ -n "$ip_addr" ] || ip_addr=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' || true)
   [ -n "$ip_addr" ] || ip_addr="OpenClaw设备IP"
   echo "OpenClaw bridge 已启动: http://${ip_addr}:${PORT}/v1"
   echo "运行用户: ${service_user}"

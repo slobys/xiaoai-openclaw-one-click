@@ -60,6 +60,12 @@ sh install.sh --client-only --speaker-ip 192.168.31.227 --server-ip 192.168.31.1
 sh install.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
 ```
 
+服务器端启动后显示的 `ws://...:4399` 应使用音箱能访问的局域网 IP。若自动识别不准，可以显式传入：
+
+```sh
+SERVER_IP=192.168.2.1 xiaoai-openclaw
+```
+
 ## 部署结构
 
 - 音箱端：刷入 Open-XiaoAI 补丁固件后，运行 Rust client，连接 `ws://服务器IP:4399`
