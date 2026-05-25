@@ -5,6 +5,11 @@ type OpenAICompatResponse = {
   error?: { message?: string };
 };
 
+type OllamaChatResponse = {
+  message?: { content?: string };
+  error?: string;
+};
+
 type GeminiResponse = {
   candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   error?: { message?: string };
@@ -30,6 +35,8 @@ function envInt(name: string, fallback: number) {
 const LLM_TIMEOUT_MS = envInt("LLM_TIMEOUT_MS", 20000);
 const TEST_TIMEOUT_MS = envInt("TEST_TIMEOUT_MS", 6000);
 const OLLAMA_TIMEOUT_MS = envInt("OLLAMA_TIMEOUT_MS", 90000);
+const OLLAMA_NUM_PREDICT = envInt("OLLAMA_NUM_PREDICT", 120);
+const OLLAMA_KEEP_ALIVE = process.env.OLLAMA_KEEP_ALIVE || "30m";
 const SPEAK_CHUNK_LEN = 45;
 const HARD_ABORT_RECOVERY_MS = 1400;
 
@@ -536,6 +543,35 @@ async function chatOpenAICompat(opts: {
   return data?.choices?.[0]?.message?.content || "";
 }
 
+function ollamaApiBase(baseURL: string) {
+  return baseURL.replace(/\/+$/, "").replace(/\/v1$/, "");
+}
+
+async function chatOllama(opts: { baseURL: string; model: string; system: string; user: string; signal?: AbortSignal }) {
+  const url = `${ollamaApiBase(opts.baseURL)}/api/chat`;
+  const { ok, status, json } = await httpPostJson(
+    url,
+    { "Content-Type": "application/json" },
+    {
+      model: opts.model,
+      stream: false,
+      keep_alive: OLLAMA_KEEP_ALIVE,
+      options: {
+        temperature: 0.7,
+        num_predict: OLLAMA_NUM_PREDICT,
+      },
+      messages: [
+        { role: "system", content: opts.system },
+        { role: "user", content: opts.user },
+      ],
+    },
+    opts.signal
+  );
+  const data = json as OllamaChatResponse;
+  if (!ok) throw new Error(`HTTP_${status}:${data?.error || "unknown"}`);
+  return data?.message?.content || "";
+}
+
 // ===== OpenAI Responses =====
 function extractResponsesText(resp: OpenAIResponsesResponse): string {
   if (typeof resp?.output_text === "string" && resp.output_text.trim()) return resp.output_text.trim();
@@ -658,9 +694,8 @@ async function callLLM(provider: Provider, model: string, system: string, userTe
 
   if (provider === "ollama") {
     if (!DEFAULT_MODELS.ollama.baseURL) throw new Error("OLLAMA_BASE_URL 未配置");
-    const text = await chatOpenAICompat({
+    const text = await chatOllama({
       baseURL: DEFAULT_MODELS.ollama.baseURL!,
-      apiKey: KEYS.OLLAMA,
       model,
       system,
       user: userText,

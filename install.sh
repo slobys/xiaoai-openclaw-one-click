@@ -122,12 +122,16 @@ write_env_if_missing() {
     append_env_if_missing "$env_file" "OLLAMA_BASE_URL" "${OLLAMA_BASE_URL:-}"
     append_env_if_missing "$env_file" "OLLAMA_MODEL" "${OLLAMA_MODEL:-gemma3:latest}"
     append_env_if_missing "$env_file" "OLLAMA_TIMEOUT_MS" "${OLLAMA_TIMEOUT_MS:-90000}"
+    append_env_if_missing "$env_file" "OLLAMA_NUM_PREDICT" "${OLLAMA_NUM_PREDICT:-120}"
+    append_env_if_missing "$env_file" "OLLAMA_KEEP_ALIVE" "${OLLAMA_KEEP_ALIVE:-30m}"
     update_env_if_provided "$env_file" "OPENCLAW_BASE_URL" "${OPENCLAW_BASE_URL:-}"
     update_env_if_provided "$env_file" "OPENCLAW_API_KEY" "${OPENCLAW_API_KEY:-}"
     update_env_if_provided "$env_file" "OPENCLAW_DISPLAY_MODEL" "${OPENCLAW_DISPLAY_MODEL:-}"
     update_env_if_provided "$env_file" "OLLAMA_BASE_URL" "${OLLAMA_BASE_URL:-}"
     update_env_if_provided "$env_file" "OLLAMA_MODEL" "${OLLAMA_MODEL:-}"
     update_env_if_provided "$env_file" "OLLAMA_TIMEOUT_MS" "${OLLAMA_TIMEOUT_MS:-}"
+    update_env_if_provided "$env_file" "OLLAMA_NUM_PREDICT" "${OLLAMA_NUM_PREDICT:-}"
+    update_env_if_provided "$env_file" "OLLAMA_KEEP_ALIVE" "${OLLAMA_KEEP_ALIVE:-}"
     if ! grep -q '^# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为:' "$env_file"; then
       printf '%s\n' '# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为: http://OpenClaw设备IP:11435/v1' >> "$env_file"
     fi
@@ -149,6 +153,8 @@ write_env_if_missing() {
     printf 'OLLAMA_BASE_URL=%s\n' "${OLLAMA_BASE_URL:-}"
     printf 'OLLAMA_MODEL=%s\n' "${OLLAMA_MODEL:-gemma3:latest}"
     printf 'OLLAMA_TIMEOUT_MS=%s\n' "${OLLAMA_TIMEOUT_MS:-90000}"
+    printf 'OLLAMA_NUM_PREDICT=%s\n' "${OLLAMA_NUM_PREDICT:-120}"
+    printf 'OLLAMA_KEEP_ALIVE=%s\n' "${OLLAMA_KEEP_ALIVE:-30m}"
     printf '# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为: http://OpenClaw设备IP:11435/v1\n'
     printf '# 如果 Ollama 在局域网电脑，OLLAMA_BASE_URL 设置为: http://电脑IP:11434/v1\n'
   } > "$env_file"
