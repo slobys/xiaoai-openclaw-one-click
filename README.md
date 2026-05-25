@@ -28,6 +28,12 @@ sh bootstrap.sh
 
 ## 直接命令
 
+在 OpenClaw 所在设备上部署 OpenClaw API bridge：
+
+```sh
+sh install-openclaw-bridge.sh
+```
+
 只部署服务器端：
 
 ```sh
@@ -51,13 +57,58 @@ sh install.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
 - 音箱端：刷入 Open-XiaoAI 补丁固件后，运行 Rust client，连接 `ws://服务器IP:4399`
 - 服务器端：运行 `idootop/open-xiaoai-migpt:latest` Docker 容器，挂载 `config.ts` 和 `.env`
 - 大模型端：默认使用 `slobys/xiaoai` 的 `config.ts`，支持 DeepSeek、OpenAI、Gemini，也支持 OpenAI-compatible 地址
-- OpenClaw：推荐第一版通过 OpenClaw 外部可调用的 OpenAI-compatible 网关接入；如果要直接调用本机 `openclaw infer model run`，后续走宿主机 Node 模式，不建议放 Docker 里
+- OpenClaw：如果 OpenClaw 和 MiGPT 服务器不在同一台设备，在 OpenClaw 设备上运行本项目的 `openclaw-llm-bridge`，让 MiGPT 服务器通过 HTTP 调用它
+
+典型三设备拓扑：
+
+```text
+小爱音箱  ->  ws://软路由或NAS:4399  ->  open-xiaoai-migpt Docker
+                                      ->  http://OpenClaw设备IP:11435/v1
+                                      ->  openclaw infer model run
+```
 
 ## 前置条件
 
 1. 音箱已经按 Open-XiaoAI 教程刷好补丁固件，并能 SSH 登录。
 2. 服务器/NAS 能被音箱局域网访问，开放 TCP `4399`。
-3. 至少准备一个模型 API Key：DeepSeek / OpenAI / Gemini。
+3. 如果直连模型，至少准备一个模型 API Key：DeepSeek / OpenAI / Gemini。
+4. 如果接入 OpenClaw，OpenClaw 所在设备要能被 MiGPT 服务器局域网访问，开放 TCP `11435`。
+
+## OpenClaw 不同设备部署
+
+如果你的 OpenClaw 在电脑 / 独立服务器上，而小爱项目跑在软路由或 NAS 上，按这个方式做：
+
+1. 在 OpenClaw 所在设备运行：
+
+```sh
+cd xiaoai-openclaw-one-click
+OPENCLAW_MODEL=openai/gpt-5.4 sh install-openclaw-bridge.sh
+```
+
+2. 在 MiGPT 服务器的 `/opt/xiaoai-openclaw/.env` 里设置：
+
+```sh
+OPENAI_BASE_URL=http://OpenClaw设备IP:11435/v1
+OPENAI_API_KEY=任意字符串
+```
+
+3. 重启 MiGPT server：
+
+```sh
+docker restart xiaoai-openclaw
+```
+
+4. 对小爱说：
+
+```text
+开启AI
+切换openai
+测试模型
+```
+
+`openclaw-llm-bridge` 同时兼容 `/v1/responses` 和 `/v1/chat/completions`。`slobys/xiaoai` 的 OpenAI 分支默认会调用 `/responses`，所以这里重点支持了 Responses 格式。
+
+安全建议：bridge 默认只适合局域网。公网使用必须套内网 VPN / Tailscale / 防火墙白名单，或者设置 `OPENCLAW_BRIDGE_TOKEN`。
 
 ## 安装后文件
 
@@ -65,6 +116,7 @@ sh install.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
 - 配置文件：`/opt/xiaoai-openclaw/config.ts`
 - 环境变量：`/opt/xiaoai-openclaw/.env`
 - 管理命令：`xiaoai-openclaw`
+- OpenClaw bridge：`/opt/openclaw-llm-bridge`
 
 ## 常用语音命令
 
@@ -79,4 +131,3 @@ sh install.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
 ## 已知边界
 
 Open-XiaoAI 上游仓库已在 2026-04-04 归档停止维护，但 Docker 镜像和 client artifact 仍可用。这个一键项目会尽量只做部署编排，不改刷机流程。
-
