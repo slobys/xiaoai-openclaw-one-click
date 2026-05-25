@@ -129,6 +129,10 @@ write_env_if_missing() {
     update_env_if_provided "$env_file" "OPENCLAW_DISPLAY_MODEL" "${OPENCLAW_DISPLAY_MODEL:-}"
     update_env_if_provided "$env_file" "OLLAMA_BASE_URL" "${OLLAMA_BASE_URL:-}"
     update_env_if_provided "$env_file" "OLLAMA_MODEL" "${OLLAMA_MODEL:-}"
+    update_env_if_blank_or_value "$env_file" "OPENCLAW_BASE_URL" "http://192.168.2.238:11435/v1" ""
+    update_env_if_blank_or_value "$env_file" "OLLAMA_BASE_URL" "http://192.168.2.193:11434/v1" ""
+    update_env_if_blank_or_value "$env_file" "OLLAMA_MODEL" "qwen3:4b" ""
+    update_env_if_blank_or_value "$env_file" "OLLAMA_MODEL" "qwen3:4b" "gemma3:latest"
     if ! grep -q '^# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为:' "$env_file"; then
       printf '%s\n' '# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为: http://OpenClaw设备IP:11435/v1' >> "$env_file"
     fi
@@ -202,6 +206,17 @@ update_env_if_provided() {
   ' "$env_file" > "$tmp_file"
   mv "$tmp_file" "$env_file"
   log "已更新 ${key} 到 $env_file"
+}
+
+update_env_if_blank_or_value() {
+  env_file="$1"
+  key="$2"
+  new_value="$3"
+  old_value="$4"
+  if ! grep -q "^${key}=${old_value}$" "$env_file"; then
+    return 0
+  fi
+  update_env_if_provided "$env_file" "$key" "$new_value"
 }
 
 install_server() {
