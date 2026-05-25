@@ -572,6 +572,15 @@ async function chatOllama(opts: { baseURL: string; model: string; system: string
   return data?.message?.content || "";
 }
 
+async function chatOllamaWithFallback(opts: { baseURL: string; apiKey: string; model: string; system: string; user: string; signal?: AbortSignal }) {
+  const nativeText = compactText(await chatOllama(opts));
+  if (nativeText) return nativeText;
+
+  // Some Ollama custom models return an empty message through /api/chat for
+  // certain prompts while /v1/chat/completions still returns content.
+  return chatOpenAICompat(opts);
+}
+
 // ===== OpenAI Responses =====
 function extractResponsesText(resp: OpenAIResponsesResponse): string {
   if (typeof resp?.output_text === "string" && resp.output_text.trim()) return resp.output_text.trim();
@@ -694,8 +703,9 @@ async function callLLM(provider: Provider, model: string, system: string, userTe
 
   if (provider === "ollama") {
     if (!DEFAULT_MODELS.ollama.baseURL) throw new Error("OLLAMA_BASE_URL 未配置");
-    const text = await chatOllama({
+    const text = await chatOllamaWithFallback({
       baseURL: DEFAULT_MODELS.ollama.baseURL!,
+      apiKey: KEYS.OLLAMA,
       model,
       system,
       user: userText,
