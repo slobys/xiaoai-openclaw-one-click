@@ -22,9 +22,9 @@ curl -fsSL https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/ma
 
 ```sh
 curl -fsSL https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/bootstrap.sh -o /usr/bin/xiaoai-openclaw && chmod +x /usr/bin/xiaoai-openclaw && xiaoai-openclaw
+```
 
 如果 GitHub raw 在你的网络里经常 `TLS connect error`，优先用这条 Gitee 命令。
-```
 
 完整项目方式：
 
