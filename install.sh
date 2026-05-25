@@ -76,6 +76,13 @@ fetch_with_fallback() {
   fetch "$fallback" "$out"
 }
 
+cache_bust_url() {
+  case "$1" in
+    *\?*) printf '%s&ts=%s\n' "$1" "$(date +%s)" ;;
+    *) printf '%s?ts=%s\n' "$1" "$(date +%s)" ;;
+  esac
+}
+
 detect_server_ip() {
   if [ -n "$SERVER_IP" ]; then
     return 0
@@ -189,7 +196,7 @@ install_server() {
   need_root
   mkdir -p "$WORK_DIR"
   install_docker_if_needed
-  fetch_with_fallback "$CONFIG_URL" "$CONFIG_CN_URL" "$WORK_DIR/config.ts"
+  fetch_with_fallback "$(cache_bust_url "$CONFIG_URL")" "$(cache_bust_url "$CONFIG_CN_URL")" "$WORK_DIR/config.ts"
   write_env_if_missing
 
   log "拉取并启动 Docker 容器..."
