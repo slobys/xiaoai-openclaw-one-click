@@ -112,8 +112,13 @@ write_env_if_missing() {
     append_env_if_missing "$env_file" "OPENCLAW_BASE_URL" "${OPENCLAW_BASE_URL:-}"
     append_env_if_missing "$env_file" "OPENCLAW_API_KEY" "${OPENCLAW_API_KEY:-xiaoai-local}"
     append_env_if_missing "$env_file" "OPENCLAW_DISPLAY_MODEL" "${OPENCLAW_DISPLAY_MODEL:-open}"
+    append_env_if_missing "$env_file" "OLLAMA_BASE_URL" "${OLLAMA_BASE_URL:-}"
+    append_env_if_missing "$env_file" "OLLAMA_MODEL" "${OLLAMA_MODEL:-gemma3:latest}"
     if ! grep -q '^# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为:' "$env_file"; then
       printf '%s\n' '# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为: http://OpenClaw设备IP:11435/v1' >> "$env_file"
+    fi
+    if ! grep -q '^# 如果 Ollama 在局域网电脑，OLLAMA_BASE_URL 设置为:' "$env_file"; then
+      printf '%s\n' '# 如果 Ollama 在局域网电脑，OLLAMA_BASE_URL 设置为: http://电脑IP:11434/v1' >> "$env_file"
     fi
     return 0
   fi
@@ -127,10 +132,14 @@ write_env_if_missing() {
     printf 'OPENCLAW_BASE_URL=%s\n' "${OPENCLAW_BASE_URL:-}"
     printf 'OPENCLAW_API_KEY=%s\n' "${OPENCLAW_API_KEY:-xiaoai-local}"
     printf 'OPENCLAW_DISPLAY_MODEL=%s\n' "${OPENCLAW_DISPLAY_MODEL:-open}"
+    printf 'OLLAMA_BASE_URL=%s\n' "${OLLAMA_BASE_URL:-}"
+    printf 'OLLAMA_MODEL=%s\n' "${OLLAMA_MODEL:-gemma3:latest}"
     printf '# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为: http://OpenClaw设备IP:11435/v1\n'
+    printf '# 如果 Ollama 在局域网电脑，OLLAMA_BASE_URL 设置为: http://电脑IP:11434/v1\n'
   } > "$env_file"
   log "如果没有通过环境变量传入 Key，请编辑 $env_file 后重新运行服务器端部署以重建容器。"
   log "如果要接入远端 OpenClaw，请把 OPENCLAW_BASE_URL 改成 http://OpenClaw设备IP:11435/v1，并说“切换open”。"
+  log "如果要接入局域网 Ollama，请把 OLLAMA_BASE_URL 改成 http://电脑IP:11434/v1，OLLAMA_MODEL 改成实际模型名，并说“切换ollama”。"
 }
 
 append_env_if_missing() {

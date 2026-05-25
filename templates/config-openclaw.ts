@@ -18,7 +18,7 @@ type OpenAIResponsesResponse = {
   error?: OpenAIResponsesError | null;
 };
 
-type Provider = "deepseek" | "openai" | "gemini" | "openclaw";
+type Provider = "deepseek" | "openai" | "gemini" | "openclaw" | "ollama";
 
 // ====== 可调参数 ======
 const LLM_TIMEOUT_MS = 20000;
@@ -136,16 +136,19 @@ const KEYS = {
   OPENAI: process.env.OPENAI_API_KEY || "",
   GEMINI: process.env.GEMINI_API_KEY || "",
   OPENCLAW: process.env.OPENCLAW_API_KEY || "xiaoai-local",
+  OLLAMA: process.env.OLLAMA_API_KEY || "ollama",
 };
 
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
 const OPENCLAW_BASE_URL = process.env.OPENCLAW_BASE_URL || "";
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "";
 
 const DEFAULT_MODELS: Record<Provider, { model: string; baseURL?: string; fallbacks?: string[] }> = {
   deepseek: { model: "deepseek-chat", baseURL: "https://api.deepseek.com/v1" },
   openai: { model: "gpt-4o-mini", baseURL: OPENAI_BASE_URL, fallbacks: ["gpt-5-nano", "gpt-4o-mini"] },
   gemini: { model: "gemini-3.1-flash-lite-preview", fallbacks: ["gemini-2.0-flash"] },
   openclaw: { model: process.env.OPENCLAW_DISPLAY_MODEL || "open", baseURL: OPENCLAW_BASE_URL },
+  ollama: { model: process.env.OLLAMA_MODEL || "gemma3:latest", baseURL: OLLAMA_BASE_URL },
 };
 
 // ===== Utils =====
@@ -229,6 +232,7 @@ function hasKeyFor(p: Provider) {
   if (p === "openai") return !!KEYS.OPENAI;
   if (p === "gemini") return !!KEYS.GEMINI;
   if (p === "openclaw") return !!DEFAULT_MODELS.openclaw.baseURL && !!KEYS.OPENCLAW;
+  if (p === "ollama") return !!DEFAULT_MODELS.ollama.baseURL;
   return !!KEYS.DEEPSEEK;
 }
 function providerDisplayName(p: Provider) {
@@ -642,6 +646,19 @@ async function callLLM(provider: Provider, model: string, system: string, userTe
     return { text, usedModel: model };
   }
 
+  if (provider === "ollama") {
+    if (!DEFAULT_MODELS.ollama.baseURL) throw new Error("OLLAMA_BASE_URL 未配置");
+    const text = await chatOpenAICompat({
+      baseURL: DEFAULT_MODELS.ollama.baseURL!,
+      apiKey: KEYS.OLLAMA,
+      model,
+      system,
+      user: userText,
+      signal,
+    });
+    return { text, usedModel: model };
+  }
+
   if (provider === "openai") {
     if (!KEYS.OPENAI) throw new Error("OPENAI_API_KEY 未配置");
     if (llmState.modelOverride) {
@@ -842,6 +859,16 @@ export const kOpenXiaoAIConfig = {
     if (cmd === "切换gemini" || cmd === "切换google" || cmd === "切换谷歌" || cmd === "切换gmini") {
       if (!requireAIMode()) return { handled: true };
       startSpeak(engine, mySeq, doSwitchProvider("gemini"));
+      return { handled: true };
+    }
+    if (
+      cmd === "切换ollama" || cmd === "切换olama" ||
+      cmd === "切换gemma" || cmd === "切换伽马" ||
+      cmd === "切换电脑" || cmd === "切换本地电脑" ||
+      cmd === "切换局域网模型"
+    ) {
+      if (!requireAIMode()) return { handled: true };
+      startSpeak(engine, mySeq, doSwitchProvider("ollama"));
       return { handled: true };
     }
     if (cmd === "切换deepseek" || cmd === "切换ds") {

@@ -62,8 +62,9 @@ sh install.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
 
 - 音箱端：刷入 Open-XiaoAI 补丁固件后，运行 Rust client，连接 `ws://服务器IP:4399`
 - 服务器端：运行 `idootop/open-xiaoai-migpt:latest` Docker 容器，挂载 `config.ts` 和 `.env`
-- 大模型端：默认使用 `slobys/xiaoai` 的 `config.ts`，支持 DeepSeek、OpenAI、Gemini，也支持 OpenAI-compatible 地址
+- 大模型端：默认使用 `slobys/xiaoai` 的 `config.ts`，支持 DeepSeek、OpenAI、Gemini、Ollama，也支持 OpenAI-compatible 地址
 - OpenClaw：如果 OpenClaw 和 MiGPT 服务器不在同一台设备，在 OpenClaw 设备上运行本项目的 `openclaw-llm-bridge`，让 MiGPT 服务器通过 HTTP 调用它
+- Ollama：如果 Gemma / Qwen 等模型在局域网电脑上运行，MiGPT 服务器可以直接调用 Ollama 的 OpenAI-compatible `/v1` 接口
 
 典型三设备拓扑：
 
@@ -77,8 +78,48 @@ sh install.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
 
 1. 音箱已经按 Open-XiaoAI 教程刷好补丁固件，并能 SSH 登录。
 2. 服务器/NAS 能被音箱局域网访问，开放 TCP `4399`。
-3. 如果直连模型，至少准备一个模型 API Key：DeepSeek / OpenAI / Gemini。
+3. 如果直连云模型，至少准备一个模型 API Key：DeepSeek / OpenAI / Gemini。Ollama 局域网调用不需要真实 API Key。
 4. 如果接入 OpenClaw，OpenClaw 所在设备要能被 MiGPT 服务器局域网访问，开放 TCP `11435`。
+5. 如果接入 Ollama，Ollama 所在电脑要能被 MiGPT 服务器局域网访问，开放 TCP `11434`。
+
+## Ollama / Gemma 局域网模型
+
+如果你的 Gemma 模型跑在局域网电脑的 Ollama 上，先在那台电脑确认模型名：
+
+```sh
+ollama list
+```
+
+例如模型名是 `gemma3:4b`，并且电脑 IP 是 `192.168.2.100`，在 MiGPT 服务器的 `/opt/xiaoai-openclaw/.env` 里设置：
+
+```sh
+OLLAMA_BASE_URL=http://192.168.2.100:11434/v1
+OLLAMA_MODEL=gemma3:4b
+```
+
+然后重建 MiGPT server 容器：
+
+```sh
+xiaoai-openclaw
+```
+
+菜单选：
+
+```text
+1) 一键部署服务器端 Docker
+```
+
+对小爱说：
+
+```text
+开启AI
+切换ollama
+测试模型
+```
+
+可用口令包括：`切换ollama`、`切换gemma`、`切换电脑`、`切换本地电脑`。
+
+如果 Ollama 只监听本机，需要在 Ollama 电脑上允许局域网访问，例如 Linux systemd 环境可设置 `OLLAMA_HOST=0.0.0.0:11434` 后重启 Ollama；Windows / macOS 也要确保防火墙放行 `11434`。
 
 ## OpenClaw 不同设备部署
 
@@ -148,6 +189,7 @@ sh install.sh --server-only
 - `开启AI`
 - `开启小爱`
 - `切换open`
+- `切换ollama`
 - `切换deepseek`
 - `切换openai`
 - `切换谷歌`
