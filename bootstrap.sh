@@ -49,16 +49,15 @@ show_menu() {
   echo "======================================"
   echo " XiaoAI OpenClaw One-Click"
   echo "======================================"
-  echo "1) 一键部署服务器端 Docker"
-  echo "2) 初始化音箱端 Client"
-  echo "3) 服务器 + 音箱端一起部署"
+  echo "1) 配置账号并部署免刷机服务"
+  echo "2) 修改小米账号/音箱/模型配置"
+  echo "3) 重建免刷机服务"
   echo "4) 部署 OpenClaw API Bridge（在 OpenClaw 设备运行）"
-  echo "5) 重启/重建服务器端 Docker（修改配置后用）"
-  echo "6) 查看服务器端状态"
-  echo "7) 查看服务器端日志"
-  echo "8) 卸载服务器端容器（保留配置）"
-  echo "9) 重启 OpenClaw API Bridge（在 OpenClaw 设备运行）"
-  echo "10) 清理 OpenClaw API Bridge（在 OpenClaw 设备运行）"
+  echo "5) 查看服务状态"
+  echo "6) 查看服务日志"
+  echo "7) 卸载服务容器（保留账号配置）"
+  echo "8) 重启 OpenClaw API Bridge（在 OpenClaw 设备运行）"
+  echo "9) 清理 OpenClaw API Bridge（在 OpenClaw 设备运行）"
   echo "0) 退出"
   echo
 }
@@ -68,22 +67,21 @@ while true; do
   printf "请选择: "
   read -r choice
   case "$choice" in
-    1) sh "$INSTALL_SH" --server-only ;;
-    2) sh "$INSTALL_SH" --client-only ;;
-    3) sh "$INSTALL_SH" --all ;;
+    1) sh "$INSTALL_SH" --install ;;
+    2) sh "$INSTALL_SH" --configure ;;
+    3) sh "$INSTALL_SH" --restart ;;
     4)
       ensure_bridge_sh
       sh "$BRIDGE_SH"
       ;;
-    5) sh "$INSTALL_SH" --restart ;;
-    6) sh "$INSTALL_SH" --status ;;
-    7) sh "$INSTALL_SH" --logs ;;
-    8) sh "$INSTALL_SH" --uninstall ;;
-    9)
+    5) sh "$INSTALL_SH" --status ;;
+    6) sh "$INSTALL_SH" --logs ;;
+    7) sh "$INSTALL_SH" --uninstall ;;
+    8)
       ensure_bridge_sh
       sh "$BRIDGE_SH" restart
       ;;
-    10)
+    9)
       ensure_bridge_sh
       sh "$BRIDGE_SH" clean
       ;;

@@ -2,58 +2,22 @@
 set -eu
 
 APP_NAME="xiaoai-openclaw"
-WORK_DIR="/opt/${APP_NAME}"
+WORK_DIR="${XIAOAI_OPENCLAW_WORK_DIR:-/opt/${APP_NAME}}"
 CONTAINER_NAME="${APP_NAME}"
-PORT="${XIAOAI_OPENCLAW_PORT:-4399}"
-CONFIG_URL="${XIAOAI_CONFIG_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/templates/config-openclaw.ts}"
-CONFIG_CN_URL="${XIAOAI_CONFIG_CN_URL:-https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/templates/config-openclaw.ts}"
-CONFIG_PROXY_URL="${XIAOAI_CONFIG_PROXY_URL:-https://gh-proxy.com/https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/templates/config-openclaw.ts}"
-CLIENT_INIT_URL="${XIAOAI_CLIENT_INIT_URL:-https://gitee.com/idootop/artifacts/releases/download/open-xiaoai-client/init.sh}"
-CLIENT_BOOT_URL="${XIAOAI_CLIENT_BOOT_URL:-https://gitee.com/idootop/artifacts/releases/download/open-xiaoai-client/boot.sh}"
-
-MODE=""
-SPEAKER_IP="${SPEAKER_IP:-}"
-SERVER_IP="${SERVER_IP:-}"
+IMAGE="${MIGPT_IMAGE:-idootop/mi-gpt:latest}"
+BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
+CN_BASE_URL="${XIAOAI_OPENCLAW_CN_BASE_URL:-https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main}"
+MODE="${1:---install}"
 
 log() { printf '%s\n' "$*"; }
 die() { log "错误: $*" >&2; exit 1; }
 
-usage() {
-  cat <<EOF
-用法:
-  sh install.sh --server-only
-  sh install.sh --client-only --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
-  sh install.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
-  sh install.sh --status
-  sh install.sh --logs
-  sh install.sh --restart
-  sh install.sh --uninstall
-EOF
-}
-
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --server-only) MODE="server" ;;
-    --client-only) MODE="client" ;;
-    --all) MODE="all" ;;
-    --status) MODE="status" ;;
-    --logs) MODE="logs" ;;
-    --restart|--recreate) MODE="restart" ;;
-    --uninstall) MODE="uninstall" ;;
-    --speaker-ip) shift; SPEAKER_IP="${1:-}" ;;
-    --server-ip) shift; SERVER_IP="${1:-}" ;;
-    -h|--help) usage; exit 0 ;;
-    *) die "未知参数: $1" ;;
-  esac
-  shift
-done
-
-[ -n "$MODE" ] || MODE="server"
-
 need_root() {
-  if [ "$(id -u)" -ne 0 ]; then
-    die "请使用 root 运行，或用 sudo sh install.sh ..."
+  [ "$(id -u)" -eq 0 ] && return 0
+  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    return 0
   fi
+  die "当前用户无 Docker 权限，请使用 sudo sh install.sh"
 }
 
 fetch() {
@@ -61,397 +25,159 @@ fetch() {
   out="$2"
   if command -v curl >/dev/null 2>&1; then
     curl -fsSL "$url" -o "$out"
-  elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$out" "$url"
   else
-    die "缺少 curl/wget"
+    wget -qO "$out" "$url"
   fi
 }
 
-fetch_with_fallback() {
-  primary="$1"
-  fallback="$2"
-  out="$3"
-  if fetch "$primary" "$out"; then
-    return 0
+fetch_template() {
+  path="$1"
+  out="$2"
+  script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+  if [ -f "$script_dir/$path" ]; then
+    cp "$script_dir/$path" "$out"
+  elif ! fetch "$BASE_URL/$path?ts=$(date +%s)" "$out"; then
+    fetch "$CN_BASE_URL/$path?ts=$(date +%s)" "$out"
   fi
-  log "主下载失败，尝试备用地址..."
-  fetch "$fallback" "$out"
-}
-
-fetch_with_fallback_chain() {
-  out="$1"
-  shift
-  first=1
-  for url in "$@"; do
-    if fetch "$url" "$out"; then
-      return 0
-    fi
-    if [ "$first" -eq 1 ]; then
-      log "主下载失败，尝试备用地址..."
-      first=0
-    else
-      log "备用地址失败，继续尝试下一地址..."
-    fi
-  done
-  die "下载失败: $out"
-}
-
-cache_bust_url() {
-  case "$1" in
-    *\?*) printf '%s&ts=%s\n' "$1" "$(date +%s)" ;;
-    *) printf '%s?ts=%s\n' "$1" "$(date +%s)" ;;
-  esac
-}
-
-detect_lan_ip() {
-  if command -v ip >/dev/null 2>&1; then
-    detected_ip=$(ip -o -4 addr show dev br-lan scope global 2>/dev/null | awk '
-      {
-        split($4, a, "/")
-        ip = a[1]
-        if (ip ~ /^10\./ || ip ~ /^192\.168\./ || ip ~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./) {
-          print ip
-          exit
-        }
-      }
-    ')
-    if [ -n "$detected_ip" ]; then
-      printf '%s\n' "$detected_ip"
-      return 0
-    fi
-    ip -o -4 addr show scope global 2>/dev/null | awk '
-      $2 ~ /^(docker|docker0|veth|tailscale|tun|wg|zt|ppp)/ { next }
-      $2 ~ /^br-/ && $2 != "br-lan" { next }
-      {
-        split($4, a, "/")
-        ip = a[1]
-        if (ip ~ /^10\./ || ip ~ /^192\.168\./ || ip ~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./) {
-          print ip
-          exit
-        }
-      }
-    '
-  fi
-}
-
-detect_server_ip() {
-  if [ -n "$SERVER_IP" ]; then
-    return 0
-  fi
-  SERVER_IP=$(detect_lan_ip || true)
-  if [ -z "$SERVER_IP" ]; then
-    printf "未能自动识别局域网 IP，请输入服务器局域网 IP（音箱能访问的地址）: "
-    read -r SERVER_IP
-  fi
-  [ -n "$SERVER_IP" ] || die "服务器 IP 不能为空"
 }
 
 install_docker_if_needed() {
-  if command -v docker >/dev/null 2>&1; then
-    return 0
-  fi
+  command -v docker >/dev/null 2>&1 && return 0
   log "正在安装 Docker..."
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update
-    apt-get install -y ca-certificates curl gnupg
-    curl -fsSL https://get.docker.com | sh
+    apt-get install -y ca-certificates curl
   elif command -v yum >/dev/null 2>&1; then
-    yum install -y yum-utils curl
-    curl -fsSL https://get.docker.com | sh
+    yum install -y curl
   else
     die "未识别的系统，请先手动安装 Docker"
   fi
+  curl -fsSL https://get.docker.com | sh
   systemctl enable --now docker 2>/dev/null || service docker start 2>/dev/null || true
 }
 
-write_env_if_missing() {
-  env_file="$WORK_DIR/.env"
-  if [ -f "$env_file" ]; then
-    append_env_if_missing "$env_file" "OPENCLAW_BASE_URL" "${OPENCLAW_BASE_URL:-http://192.168.2.238:11435/v1}"
-    append_env_if_missing "$env_file" "OPENCLAW_API_KEY" "${OPENCLAW_API_KEY:-xiaoai-local}"
-    append_env_if_missing "$env_file" "OPENCLAW_DISPLAY_MODEL" "${OPENCLAW_DISPLAY_MODEL:-open}"
-    append_env_if_missing "$env_file" "OPENCLAW_TIMEOUT_MS" "${OPENCLAW_TIMEOUT_MS:-90000}"
-    append_env_if_missing "$env_file" "OPENCLAW_TEST_TIMEOUT_MS" "${OPENCLAW_TEST_TIMEOUT_MS:-30000}"
-    append_env_if_missing "$env_file" "SPEAK_CHUNK_LEN" "${SPEAK_CHUNK_LEN:-28}"
-    append_env_if_missing "$env_file" "SPEAK_MS_PER_CHAR" "${SPEAK_MS_PER_CHAR:-220}"
-    append_env_if_missing "$env_file" "SPEAK_CHUNK_GAP_MS" "${SPEAK_CHUNK_GAP_MS:-260}"
-    append_env_if_missing "$env_file" "CONVERSATION_TURNS" "${CONVERSATION_TURNS:-6}"
-    append_env_if_missing "$env_file" "OLLAMA_BASE_URL" "${OLLAMA_BASE_URL:-http://192.168.2.193:11434/v1}"
-    append_env_if_missing "$env_file" "OLLAMA_MODEL" "${OLLAMA_MODEL:-qwen3:4b}"
-    remove_env_key "$env_file" "PREFIX_GATE_MODE"
-    remove_env_key "$env_file" "OLLAMA_TIMEOUT_MS"
-    remove_env_key "$env_file" "OLLAMA_NUM_PREDICT"
-    remove_env_key "$env_file" "OLLAMA_KEEP_ALIVE"
-    update_env_if_provided "$env_file" "OPENCLAW_BASE_URL" "${OPENCLAW_BASE_URL:-}"
-    update_env_if_provided "$env_file" "OPENCLAW_API_KEY" "${OPENCLAW_API_KEY:-}"
-    update_env_if_provided "$env_file" "OPENCLAW_DISPLAY_MODEL" "${OPENCLAW_DISPLAY_MODEL:-}"
-    update_env_if_provided "$env_file" "OPENCLAW_TIMEOUT_MS" "${OPENCLAW_TIMEOUT_MS:-}"
-    update_env_if_provided "$env_file" "OPENCLAW_TEST_TIMEOUT_MS" "${OPENCLAW_TEST_TIMEOUT_MS:-}"
-    update_env_if_provided "$env_file" "SPEAK_CHUNK_LEN" "${SPEAK_CHUNK_LEN:-}"
-    update_env_if_provided "$env_file" "SPEAK_MS_PER_CHAR" "${SPEAK_MS_PER_CHAR:-}"
-    update_env_if_provided "$env_file" "SPEAK_CHUNK_GAP_MS" "${SPEAK_CHUNK_GAP_MS:-}"
-    update_env_if_provided "$env_file" "CONVERSATION_TURNS" "${CONVERSATION_TURNS:-}"
-    update_env_if_provided "$env_file" "OLLAMA_BASE_URL" "${OLLAMA_BASE_URL:-}"
-    update_env_if_provided "$env_file" "OLLAMA_MODEL" "${OLLAMA_MODEL:-}"
-    update_env_if_blank_or_value "$env_file" "OPENCLAW_BASE_URL" "http://192.168.2.238:11435/v1" ""
-    update_env_if_blank_or_value "$env_file" "OLLAMA_BASE_URL" "http://192.168.2.193:11434/v1" ""
-    update_env_if_blank_or_value "$env_file" "OLLAMA_MODEL" "qwen3:4b" ""
-    update_env_if_blank_or_value "$env_file" "OLLAMA_MODEL" "qwen3:4b" "gemma3:latest"
-    annotate_env_file "$env_file"
-    return 0
-  fi
-  log "创建环境变量文件: $env_file"
-  umask 077
-  {
-    printf '# DEEPSEEK_API_KEY：DeepSeek 官方 API Key；说“切换 deepseek”后使用。\n'
-    printf 'DEEPSEEK_API_KEY=%s\n' "${DEEPSEEK_API_KEY:-}"
-    printf '# OPENAI_API_KEY：OpenAI 官方或兼容接口 API Key；说“切换 openai”后使用。\n'
-    printf 'OPENAI_API_KEY=%s\n' "${OPENAI_API_KEY:-}"
-    printf '# GEMINI_API_KEY：Gemini API Key；说“切换 gemini”后使用。\n'
-    printf 'GEMINI_API_KEY=%s\n' "${GEMINI_API_KEY:-}"
-    printf '# OPENAI_BASE_URL：OpenAI 接口地址；兼容服务可改成自己的 /v1 地址。\n'
-    printf 'OPENAI_BASE_URL=%s\n' "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
-    printf '# CONVERSATION_TURNS：连续对话保留轮数；0 表示不保留上下文。\n'
-    printf 'CONVERSATION_TURNS=%s\n' "${CONVERSATION_TURNS:-6}"
-    printf '\n'
-    printf '# OPENCLAW_BASE_URL：OpenClaw API Bridge 地址；OpenClaw 在另一台设备时改成 http://OpenClaw设备IP:11435/v1。\n'
-    printf 'OPENCLAW_BASE_URL=%s\n' "${OPENCLAW_BASE_URL:-http://192.168.2.238:11435/v1}"
-    printf '# OPENCLAW_API_KEY：OpenClaw API Bridge 鉴权 Key；需和部署 Bridge 时的 OPENCLAW_BRIDGE_TOKEN 一致，默认本地测试可用 xiaoai-local。\n'
-    printf 'OPENCLAW_API_KEY=%s\n' "${OPENCLAW_API_KEY:-xiaoai-local}"
-    printf '# OPENCLAW_DISPLAY_MODEL：语音里显示/切换用的模型名；默认说“切换 open”即可使用 OpenClaw。\n'
-    printf 'OPENCLAW_DISPLAY_MODEL=%s\n' "${OPENCLAW_DISPLAY_MODEL:-open}"
-    printf '# OPENCLAW_TIMEOUT_MS：OpenClaw 正常问答超时时间，单位毫秒；OpenClaw 响应慢时可适当调大。\n'
-    printf 'OPENCLAW_TIMEOUT_MS=%s\n' "${OPENCLAW_TIMEOUT_MS:-90000}"
-    printf '# OPENCLAW_TEST_TIMEOUT_MS：“测试模型”命令的超时时间，单位毫秒；一般保持 30000 即可。\n'
-    printf 'OPENCLAW_TEST_TIMEOUT_MS=%s\n' "${OPENCLAW_TEST_TIMEOUT_MS:-30000}"
-    printf '\n'
-    printf '# SPEAK_CHUNK_LEN：每段最多字符数；越小越不容易漏字，但回答会被切成更多段。\n'
-    printf 'SPEAK_CHUNK_LEN=%s\n' "${SPEAK_CHUNK_LEN:-28}"
-    printf '# SPEAK_MS_PER_CHAR：每个字预估播报耗时，单位毫秒；音箱抢播/漏字时可调大。\n'
-    printf 'SPEAK_MS_PER_CHAR=%s\n' "${SPEAK_MS_PER_CHAR:-220}"
-    printf '# SPEAK_CHUNK_GAP_MS：每段播报之间的额外间隔，单位毫秒；仍漏字时可从 260 调到 400。\n'
-    printf 'SPEAK_CHUNK_GAP_MS=%s\n' "${SPEAK_CHUNK_GAP_MS:-260}"
-    printf '# OLLAMA_BASE_URL：Ollama OpenAI 兼容地址；Ollama 在局域网电脑时改成 http://电脑IP:11434/v1。\n'
-    printf 'OLLAMA_BASE_URL=%s\n' "${OLLAMA_BASE_URL:-http://192.168.2.193:11434/v1}"
-    printf '# OLLAMA_MODEL：Ollama 模型名；必须和 ollama list 里的模型名一致，说“切换 ollama”后使用。\n'
-    printf 'OLLAMA_MODEL=%s\n' "${OLLAMA_MODEL:-qwen3:4b}"
-  } > "$env_file"
-  log "如果没有通过环境变量传入 Key，请编辑 $env_file 后重新运行服务器端部署以重建容器。"
-  log "如果要接入远端 OpenClaw，请把 OPENCLAW_BASE_URL 改成 http://OpenClaw设备IP:11435/v1，并说“切换open”。"
-  log "如果要接入局域网 Ollama，请把 OLLAMA_BASE_URL 改成 http://电脑IP:11434/v1，OLLAMA_MODEL 改成实际模型名，并说“切换ollama”。"
+env_value() {
+  key="$1"
+  [ -f "$WORK_DIR/.env" ] || return 0
+  sed -n "s/^${key}=//p" "$WORK_DIR/.env" | tail -n 1
 }
 
-annotate_env_file() {
-  env_file="$1"
-  tmp_file="${env_file}.tmp.$$"
-  awk '
-    BEGIN {
-      note["DEEPSEEK_API_KEY"] = "DeepSeek 官方 API Key；说“切换 deepseek”后使用。"
-      note["OPENAI_API_KEY"] = "OpenAI 官方或兼容接口 API Key；说“切换 openai”后使用。"
-      note["GEMINI_API_KEY"] = "Gemini API Key；说“切换 gemini”后使用。"
-      note["OPENAI_BASE_URL"] = "OpenAI 接口地址；兼容服务可改成自己的 /v1 地址。"
-      note["CONVERSATION_TURNS"] = "连续对话保留轮数；0 表示不保留上下文。"
-      note["OPENCLAW_BASE_URL"] = "OpenClaw API Bridge 地址；OpenClaw 在另一台设备时改成 http://OpenClaw设备IP:11435/v1。"
-      note["OPENCLAW_API_KEY"] = "OpenClaw API Bridge 鉴权 Key；需和 Bridge 的 OPENCLAW_BRIDGE_TOKEN 一致，默认本地测试可用 xiaoai-local。"
-      note["OPENCLAW_DISPLAY_MODEL"] = "语音里显示/切换用的模型名；默认说“切换 open”即可使用 OpenClaw。"
-      note["OPENCLAW_TIMEOUT_MS"] = "OpenClaw 正常问答超时时间，单位毫秒；OpenClaw 响应慢时可适当调大。"
-      note["OPENCLAW_TEST_TIMEOUT_MS"] = "“测试模型”命令的超时时间，单位毫秒；一般保持 30000 即可。"
-      note["SPEAK_CHUNK_LEN"] = "每段最多字符数；越小越不容易漏字，但回答会被切成更多段。"
-      note["SPEAK_MS_PER_CHAR"] = "每个字预估播报耗时，单位毫秒；音箱抢播/漏字时可调大。"
-      note["SPEAK_CHUNK_GAP_MS"] = "每段播报之间的额外间隔，单位毫秒；仍漏字时可从 260 调到 400。"
-      note["OLLAMA_BASE_URL"] = "Ollama OpenAI 兼容地址；Ollama 在局域网电脑时改成 http://电脑IP:11434/v1。"
-      note["OLLAMA_MODEL"] = "Ollama 模型名；必须和 ollama list 里的模型名一致，说“切换 ollama”后使用。"
-    }
-    /^# ===== 参数说明 =====/ { skip_notes = 1; next }
-    skip_notes && /^# (DEEPSEEK_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_BASE_URL|CONVERSATION_TURNS|OPENCLAW_BASE_URL|OPENCLAW_API_KEY|OPENCLAW_DISPLAY_MODEL|OPENCLAW_TIMEOUT_MS|OPENCLAW_TEST_TIMEOUT_MS|SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|PREFIX_GATE_MODE|OLLAMA_BASE_URL|OLLAMA_MODEL)：/ { next }
-    skip_notes && /^$/ { next }
-    skip_notes { skip_notes = 0 }
-    /^# ===== (API Key 配置|OpenClaw 配置|小爱播报配置|Ollama 配置) =====/ { next }
-    /^# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为:/ { next }
-    /^# 如果 Ollama 在局域网电脑，OLLAMA_BASE_URL 设置为:/ { next }
-    /^# (DeepSeek 官方 API Key|OpenAI 官方或兼容接口 API Key|Gemini API Key|OpenAI 接口地址|连续对话保留轮数|OpenClaw API Bridge 地址|OpenClaw API Bridge 鉴权 Key|语音里显示\/切换用的模型名|OpenClaw 正常问答超时时间|“测试模型”命令的超时时间|每段最多字符数|每个字预估播报耗时|每段播报之间的额外间隔|前缀识别方式|Ollama OpenAI 兼容地址|Ollama 模型名)/ { next }
-    /^# (DEEPSEEK_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_BASE_URL|CONVERSATION_TURNS|OPENCLAW_BASE_URL|OPENCLAW_API_KEY|OPENCLAW_DISPLAY_MODEL|OPENCLAW_TIMEOUT_MS|OPENCLAW_TEST_TIMEOUT_MS|SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|PREFIX_GATE_MODE|OLLAMA_BASE_URL|OLLAMA_MODEL)：/ { next }
-    /^[A-Z0-9_]+=/ {
-      key = $0
-      sub(/=.*/, "", key)
-      if (key in note) {
-        print "# " key "：" note[key]
-      }
-      print
-      next
-    }
-    { print }
-  ' "$env_file" > "$tmp_file"
-  mv "$tmp_file" "$env_file"
-  log "已按变量位置补充参数备注到 $env_file"
+set_env() {
+  key="$1"
+  value="$2"
+  tmp="$WORK_DIR/.env.tmp.$$"
+  found=0
+  : > "$tmp"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      "$key="*)
+        if [ "$found" -eq 0 ]; then
+          printf '%s=%s\n' "$key" "$value" >> "$tmp"
+          found=1
+        fi
+        ;;
+      *) printf '%s\n' "$line" >> "$tmp" ;;
+    esac
+  done < "$WORK_DIR/.env"
+  [ "$found" -eq 1 ] || printf '%s=%s\n' "$key" "$value" >> "$tmp"
+  mv "$tmp" "$WORK_DIR/.env"
+  chmod 600 "$WORK_DIR/.env"
 }
 
-append_env_if_missing() {
-  env_file="$1"
-  key="$2"
-  value="$3"
-  if grep -q "^${key}=" "$env_file"; then
-    return 0
-  fi
-  printf '%s=%s\n' "$key" "$value" >> "$env_file"
-  log "已补充 ${key} 到 $env_file"
-}
-
-remove_env_key() {
-  env_file="$1"
-  key="$2"
-  if ! grep -q "^${key}=" "$env_file"; then
-    return 0
-  fi
-  tmp_file="${env_file}.tmp.$$"
-  awk -v key="$key" '$0 !~ "^" key "=" { print }' "$env_file" > "$tmp_file"
-  mv "$tmp_file" "$env_file"
-  log "已移除 ${key}"
-}
-
-update_env_if_provided() {
-  env_file="$1"
-  key="$2"
-  value="$3"
-  if [ -z "$value" ]; then
-    return 0
-  fi
-  tmp_file="${env_file}.tmp.$$"
-  awk -v key="$key" -v value="$value" '
-    BEGIN { replaced = 0 }
-    $0 ~ "^" key "=" {
-      print key "=" value
-      replaced = 1
-      next
-    }
-    { print }
-    END {
-      if (!replaced) print key "=" value
-    }
-  ' "$env_file" > "$tmp_file"
-  mv "$tmp_file" "$env_file"
-  log "已更新 ${key} 到 $env_file"
-}
-
-update_env_if_blank_or_value() {
-  env_file="$1"
-  key="$2"
-  new_value="$3"
-  old_value="$4"
-  if ! grep -q "^${key}=${old_value}$" "$env_file"; then
-    return 0
-  fi
-  update_env_if_provided "$env_file" "$key" "$new_value"
-}
-
-install_server() {
-  need_root
-  mkdir -p "$WORK_DIR"
-  install_docker_if_needed
-  fetch_with_fallback_chain "$WORK_DIR/config.ts" \
-    "$(cache_bust_url "$CONFIG_URL")" \
-    "$(cache_bust_url "$CONFIG_CN_URL")" \
-    "$(cache_bust_url "$CONFIG_PROXY_URL")"
-  write_env_if_missing
-
-  log "拉取并启动 Docker 容器..."
-  log "首次拉取 idootop/open-xiaoai-migpt:latest 会下载并解压多层镜像，在软路由/NAS 上可能持续几分钟。"
-  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-  docker run -d \
-    --name "$CONTAINER_NAME" \
-    --restart unless-stopped \
-    -p "${PORT}:4399" \
-    --env-file "$WORK_DIR/.env" \
-    -v "$WORK_DIR/config.ts:/app/config.ts:ro" \
-    idootop/open-xiaoai-migpt:latest >/dev/null
-
-  detect_server_ip
-  log "服务器端已启动: ws://${SERVER_IP}:${PORT}"
-  log "配置目录: $WORK_DIR"
-}
-
-start_server_from_existing_config() {
-  need_root
-  install_docker_if_needed
-  [ -f "$WORK_DIR/.env" ] || die "缺少 $WORK_DIR/.env，请先部署服务器端"
-  [ -f "$WORK_DIR/config.ts" ] || die "缺少 $WORK_DIR/config.ts，请先部署服务器端"
-
-  log "正在重建 Docker 容器以加载最新配置..."
-  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-  docker run -d \
-    --name "$CONTAINER_NAME" \
-    --restart unless-stopped \
-    -p "${PORT}:4399" \
-    --env-file "$WORK_DIR/.env" \
-    -v "$WORK_DIR/config.ts:/app/config.ts:ro" \
-    idootop/open-xiaoai-migpt:latest >/dev/null
-
-  detect_server_ip
-  log "服务器端已重建: ws://${SERVER_IP}:${PORT}"
-  log "已加载配置: $WORK_DIR/.env 和 $WORK_DIR/config.ts"
-}
-
-ask_client_inputs() {
-  if [ -z "$SPEAKER_IP" ]; then
-    printf "请输入小爱音箱 IP: "
-    read -r SPEAKER_IP
-  fi
-  detect_server_ip
-  [ -n "$SPEAKER_IP" ] || die "小爱音箱 IP 不能为空"
-}
-
-install_client() {
-  ask_client_inputs
-  command -v ssh >/dev/null 2>&1 || die "本机缺少 ssh"
-  ws_url="ws://${SERVER_IP}:${PORT}"
-  log "正在配置音箱端 Client: root@${SPEAKER_IP} -> ${ws_url}"
-  ssh -o HostKeyAlgorithms=+ssh-rsa -o StrictHostKeyChecking=accept-new "root@${SPEAKER_IP}" "
-    set -e
-    mkdir -p /data/open-xiaoai
-    echo '${ws_url}' > /data/open-xiaoai/server.txt
-    if command -v curl >/dev/null 2>&1; then
-      curl -L -o /data/init.sh '${CLIENT_BOOT_URL}'
-      curl -sSfL '${CLIENT_INIT_URL}' | sh
-    else
-      wget -O /data/init.sh '${CLIENT_BOOT_URL}'
-      wget -qO- '${CLIENT_INIT_URL}' | sh
-    fi
-    chmod +x /data/init.sh
-  "
-  log "音箱端已配置。重启音箱后会自启动；当前也已尝试启动 Client。"
-}
-
-show_status() {
-  if command -v docker >/dev/null 2>&1; then
-    docker ps -a --filter "name=${CONTAINER_NAME}"
+ask() {
+  key="$1"
+  prompt="$2"
+  default=$(env_value "$key")
+  if [ -n "$default" ]; then
+    printf "%s [%s]: " "$prompt" "$default" >&2
   else
-    log "Docker 未安装"
+    printf "%s: " "$prompt" >&2
   fi
-  [ -f "$WORK_DIR/.env" ] && log "环境变量文件: $WORK_DIR/.env"
-  [ -f "$WORK_DIR/config.ts" ] && log "配置文件: $WORK_DIR/config.ts"
+  read -r value
+  [ -n "$value" ] || value="$default"
+  set_env "$key" "$value"
 }
 
-show_logs() {
-  command -v docker >/dev/null 2>&1 || die "Docker 未安装"
-  docker logs -f --tail=120 "$CONTAINER_NAME"
+ask_secret() {
+  key="$1"
+  prompt="$2"
+  current=$(env_value "$key")
+  if [ -n "$current" ]; then
+    printf "%s [直接回车保持不变]: " "$prompt" >&2
+  else
+    printf "%s: " "$prompt" >&2
+  fi
+  if command -v stty >/dev/null 2>&1; then
+    stty -echo 2>/dev/null || true
+    read -r value
+    stty echo 2>/dev/null || true
+    printf '\n' >&2
+  else
+    read -r value
+  fi
+  [ -n "$value" ] || value="$current"
+  set_env "$key" "$value"
 }
 
-uninstall_server() {
+prepare_files() {
+  mkdir -p "$WORK_DIR"
+  if [ ! -f "$WORK_DIR/.env" ]; then
+    fetch_template "templates/env.example" "$WORK_DIR/.env"
+    chmod 600 "$WORK_DIR/.env"
+  fi
+  fetch_template "templates/migpt-account.js" "$WORK_DIR/.migpt.js"
+}
+
+configure() {
+  prepare_files
+  log "填写小米账号和音箱信息。小米 ID 不是手机号或邮箱。"
+  ask "MI_USER" "小米 ID"
+  ask_secret "MI_PASS" "小米账号密码"
+  ask "MI_DID" "米家中的音箱名称或 DID"
+  ask "XIAOAI_HARDWARE" "音箱型号代码（例如 LX06、L05B、OH2P）"
+  ask "OPENAI_BASE_URL" "模型接口地址（OpenClaw bridge 可填 http://设备IP:11435/v1）"
+  ask_secret "OPENAI_API_KEY" "模型接口 API Key"
+  ask "OPENAI_MODEL" "模型名称（OpenClaw 默认填 open）"
+  log "配置已保存到 $WORK_DIR/.env"
+  log "已有服务时，请运行重建服务使新配置生效。"
+}
+
+validate_config() {
+  for key in MI_USER MI_PASS MI_DID; do
+    [ -n "$(env_value "$key")" ] || die "$key 未配置，请先运行配置账号"
+  done
+}
+
+start_container() {
   need_root
-  if command -v docker >/dev/null 2>&1; then
-    docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-  fi
-  log "容器已删除。配置目录保留在 $WORK_DIR，如需删除请手动处理。"
+  prepare_files
+  validate_config
+  install_docker_if_needed
+  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  docker run -d \
+    --name "$CONTAINER_NAME" \
+    --restart unless-stopped \
+    --network host \
+    --env-file "$WORK_DIR/.env" \
+    -v "$WORK_DIR/.migpt.js:/app/.migpt.js:ro" \
+    "$IMAGE" >/dev/null
+  log "免刷机小爱服务已启动。首次登录可能需要稍等片刻。"
+  log "查看日志: docker logs -f $CONTAINER_NAME"
 }
 
 case "$MODE" in
-  server) install_server ;;
-  client) install_client ;;
-  all) install_server; install_client ;;
-  status) show_status ;;
-  logs) show_logs ;;
-  restart) start_server_from_existing_config ;;
-  uninstall) uninstall_server ;;
-  *) usage; exit 1 ;;
+  --install) configure; start_container ;;
+  --configure) configure ;;
+  --restart) start_container ;;
+  --status) docker ps -a --filter "name=${CONTAINER_NAME}" ;;
+  --logs) docker logs -f --tail=120 "$CONTAINER_NAME" ;;
+  --uninstall)
+    need_root
+    docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+    log "容器已删除，账号配置仍保留在 $WORK_DIR"
+    ;;
+  -h|--help)
+    echo "用法: sh install.sh [--install|--configure|--restart|--status|--logs|--uninstall]"
+    ;;
+  *) die "未知参数: $MODE" ;;
 esac

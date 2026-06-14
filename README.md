@@ -1,10 +1,10 @@
 # XiaoAI OpenClaw One-Click
 
-小爱音箱 Pro / Xiaomi 智能音箱 Pro 接入 Open-XiaoAI、OpenClaw 和常见大模型的一键脚本。
+免刷机把小爱音箱接入 OpenClaw 或其他 OpenAI 兼容大模型。
 
-适用机型：小爱音箱 Pro（LX06）、Xiaomi 智能音箱 Pro（OH2P）。其他型号不要直接刷 Open-XiaoAI 固件。
+项目通过小米账号读取音箱对话记录并调用音箱 TTS，不需要刷固件、不需要音箱 SSH，也不限制音箱必须和服务器处于同一局域网。
 
-## 一键菜单
+## 一键安装
 
 NAS / 普通 Linux：
 
@@ -12,16 +12,10 @@ NAS / 普通 Linux：
 curl -fsSL https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/bootstrap.sh -o /tmp/xiaoai-openclaw && chmod +x /tmp/xiaoai-openclaw && sudo /tmp/xiaoai-openclaw
 ```
 
-iStoreOS / OpenWrt / root 用户：
+国内网络：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/bootstrap.sh -o /usr/bin/xiaoai-openclaw && chmod +x /usr/bin/xiaoai-openclaw && xiaoai-openclaw
-```
-
-国内网络优先用 Gitee：
-
-```sh
-curl -fsSL https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/bootstrap.sh -o /usr/bin/xiaoai-openclaw && chmod +x /usr/bin/xiaoai-openclaw && xiaoai-openclaw
+curl -fsSL https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/bootstrap.sh -o /tmp/xiaoai-openclaw && chmod +x /tmp/xiaoai-openclaw && sudo /tmp/xiaoai-openclaw
 ```
 
 完整项目方式：
@@ -29,148 +23,91 @@ curl -fsSL https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/bootstr
 ```sh
 git clone https://github.com/slobys/xiaoai-openclaw-one-click.git
 cd xiaoai-openclaw-one-click
-sh bootstrap.sh
+sudo sh bootstrap.sh
 ```
 
-## 直接部署
+菜单选择 `1`，按提示填写：
 
-```sh
-# 只部署 MiGPT 服务器端
-sh install.sh --server-only
+- 小米 ID：不是手机号或邮箱，可在小米账号个人信息中查看
+- 小米账号密码
+- 米家中的音箱名称或 DID
+- 音箱型号代码，例如 `LX06`、`L05B`、`OH2P`
+- OpenClaw bridge 或其他 OpenAI 兼容模型接口
 
-# 只初始化音箱端 client
-sh install.sh --client-only --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
+账号配置保存在 `/opt/xiaoai-openclaw/.env`，文件权限默认为仅 root 可读。
 
-# 服务器和音箱端一起部署
-sh install.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
+## 使用
 
-# 在 OpenClaw 设备上部署 API bridge
-sh install-openclaw-bridge.sh
-```
-
-服务器端启动后会显示 `ws://...:4399`。这个地址必须是音箱能访问的局域网 IP。识别不准时手动指定：
-
-```sh
-SERVER_IP=192.168.2.1 xiaoai-openclaw
-```
-
-## 结构
+默认语音命令：
 
 ```text
-小爱音箱  ->  ws://软路由或NAS:4399  ->  open-xiaoai-migpt Docker
-                                      ->  DeepSeek / OpenAI / Gemini / Ollama
-                                      ->  OpenClaw API Bridge
+问AI今天天气怎么样
+打开AI
+关闭AI
 ```
 
-需要准备：
-
-- 音箱已刷 Open-XiaoAI 补丁固件，并能 SSH 登录
-- MiGPT 服务器开放 TCP `4399`
-- OpenClaw bridge 设备开放 TCP `11435`
-- Ollama 电脑开放 TCP `11434`
-- 云模型至少配置一个 API Key
-
-配置文件在 `/opt/xiaoai-openclaw/.env`，改完后用菜单 `5) 重启/重建服务器端 Docker（修改配置后用）`。
-
-默认保留最近 6 轮上下文，连续追问会接上前面的内容。需要关闭时改：
+`问AI` 用于单次提问。部分音箱支持说 `打开AI` 后连续对话；需要在配置中设置：
 
 ```env
-CONVERSATION_TURNS=0
+XIAOAI_STREAM_RESPONSE=true
 ```
 
-## OpenClaw
+如果连续对话异常，请保持 `false`。
 
-OpenClaw 不在 MiGPT 同一台设备时，在 OpenClaw 设备运行：
+## 接入 OpenClaw
 
-```sh
-sh install-openclaw-bridge.sh
-```
-
-然后在 MiGPT 服务器的 `/opt/xiaoai-openclaw/.env` 设置：
+在安装了 OpenClaw 的设备运行菜单 `4` 部署 API bridge，然后把免刷机服务配置为：
 
 ```env
-OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
-OPENCLAW_API_KEY=xiaoai-local
-OPENCLAW_DISPLAY_MODEL=open
-OPENCLAW_TIMEOUT_MS=90000
-OPENCLAW_TEST_TIMEOUT_MS=30000
+OPENAI_BASE_URL=http://OpenClaw设备IP:11435/v1
+OPENAI_API_KEY=xiaoai-local
+OPENAI_MODEL=open
 ```
 
-bridge 默认使用 OpenClaw Agent 模式，并绑定会话 `agent:main:xiaoai`，连续对话会进入同一个会话。只想跑一次性模型调用时再设置：
+修改后运行菜单 `3` 重建服务。
 
-```sh
-OPENCLAW_BRIDGE_MODE=infer sh install-openclaw-bridge.sh
-```
+## 兼容性
 
-健康检查：
-
-```sh
-curl http://OpenClaw设备IP:11435/health
-```
-
-## Ollama
-
-先确认模型名：
-
-```sh
-ollama list
-```
-
-在 `/opt/xiaoai-openclaw/.env` 设置：
-
-```env
-OLLAMA_BASE_URL=http://电脑IP:11434/v1
-OLLAMA_MODEL=qwen3:4b
-```
-
-Ollama 如果只监听本机，需要设置 `OLLAMA_HOST=0.0.0.0:11434` 并放行防火墙。
-
-也可以运行菜单时直接覆盖：
-
-```sh
-OLLAMA_BASE_URL=http://192.168.2.193:11434/v1 OLLAMA_MODEL=qwen3:4b xiaoai-openclaw
-```
-
-## 语音命令
+已内置常见型号指令：
 
 ```text
-开启AI
-开启小爱
-切换open
-切换ollama
-切换deepseek
-切换openai
-切换谷歌
-测试模型
-清空上下文
-停止
-闭嘴
+OH2P LX06 S12 L15A LX5A LX05 X10A L17A L06A LX01
+L05B L05C L09A LX04 ASX4B X6A X08E
 ```
 
-Ollama 也兼容这些口令：`切换欧拉拉`、`切换奥拉马`、`切换gemma`、`切换电脑`、`切换本地电脑`。
+兼容性取决于小米云端是否返回该音箱的对话记录，以及机型是否支持对应 TTS 指令。个别型号可能只能单次问答，少数型号完全不支持。
 
-## 播报丢字
+## 能力边界
 
-如果日志完整但音箱播报漏字，调 `/opt/xiaoai-openclaw/.env`：
-
-```env
-SPEAK_CHUNK_LEN=28
-SPEAK_MS_PER_CHAR=220
-SPEAK_CHUNK_GAP_MS=260
-```
-
-仍然漏字时，先把 `SPEAK_CHUNK_LEN` 调到 `20`，或把 `SPEAK_CHUNK_GAP_MS` 调到 `400`，然后重建服务器端 Docker。
+- 免刷机模式依赖小米云端接口，响应速度和打断效果不如刷机方案。
+- 普通小爱命令会先由原生小爱处理，项目只能在云端记录出现后接管回答。
+- 当前只支持小爱音箱。天猫精灵、小度、Alexa 等品牌没有通用账号接口，需要分别开发官方 Skill 或品牌适配器。
+- 小米账号密码会保存在本机，请只部署在可信设备上。
+- 上游 MiGPT 已于 2026 年 4 月归档，后续需要逐步把账号适配能力迁移到本项目维护。
 
 ## 文件位置
 
-- 工作目录：`/opt/xiaoai-openclaw`
-- MiGPT 配置：`/opt/xiaoai-openclaw/config.ts`
-- 环境变量：`/opt/xiaoai-openclaw/.env`
-- 管理命令：`xiaoai-openclaw`
+- 账号和模型配置：`/opt/xiaoai-openclaw/.env`
+- MiGPT 配置：`/opt/xiaoai-openclaw/.migpt.js`
 - OpenClaw bridge：`/opt/openclaw-llm-bridge`
 
-## 注意
+本项目使用 [MiGPT](https://github.com/idootop/mi-gpt) 提供的免刷机小米云端能力。
 
-Open-XiaoAI 上游仓库已在 2026-04-04 归档停止维护。本项目只做部署编排，不包含刷机流程。
+## 版本切换
 
-首次拉取 `idootop/open-xiaoai-migpt:latest` 可能比较慢，软路由和 NAS 上尤其明显。
+- `v2.0.0-account`：当前免刷机账号版
+- `v1.0.0-flash`：原 Open-XiaoAI 刷机版
+
+切换到免刷机版：
+
+```sh
+git switch main
+```
+
+切换到原刷机版：
+
+```sh
+git switch legacy-flash
+```
+
+标签用于固定历史版本，分支用于继续维护对应版本。
