@@ -3,10 +3,11 @@ set -eu
 
 PROJECT_NAME="xiaoai-openclaw"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-INSTALL_SH="$SCRIPT_DIR/install.sh"
+INSTALL_SH=""
 BRIDGE_SH=""
 BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
 CN_BASE_URL="${XIAOAI_OPENCLAW_CN_BASE_URL:-https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main}"
+TMP_DIR="/tmp/${PROJECT_NAME}-one-click"
 
 fetch() {
   url="$1"
@@ -33,24 +34,33 @@ fetch_from_mirrors() {
   fi
 }
 
-if [ ! -f "$INSTALL_SH" ]; then
-  TMP_DIR="/tmp/${PROJECT_NAME}-one-click"
+prepare_install_sh() {
+  # Use the local checkout when bootstrap.sh is run from the project directory.
+  if [ -f "$SCRIPT_DIR/install.sh" ] && [ -d "$SCRIPT_DIR/templates" ]; then
+    INSTALL_SH="$SCRIPT_DIR/install.sh"
+    return 0
+  fi
+
+  # Single-file installs run from /tmp; always refresh child scripts there so a
+  # stale cached install.sh cannot disagree with the newly downloaded menu.
   rm -rf "$TMP_DIR"
   mkdir -p "$TMP_DIR"
   fetch_from_mirrors "install.sh" "$TMP_DIR/install.sh"
   chmod +x "$TMP_DIR/install.sh"
   INSTALL_SH="$TMP_DIR/install.sh"
-fi
+}
 
 ensure_bridge_sh() {
-  BRIDGE_SH="$SCRIPT_DIR/install-openclaw-bridge.sh"
-  if [ ! -f "$BRIDGE_SH" ]; then
-    TMP_DIR="/tmp/${PROJECT_NAME}-one-click"
+  if [ -f "$SCRIPT_DIR/install-openclaw-bridge.sh" ] && [ -d "$SCRIPT_DIR/templates" ]; then
+    BRIDGE_SH="$SCRIPT_DIR/install-openclaw-bridge.sh"
+  else
     mkdir -p "$TMP_DIR"
     fetch_from_mirrors "install-openclaw-bridge.sh" "$TMP_DIR/install-openclaw-bridge.sh"
     BRIDGE_SH="$TMP_DIR/install-openclaw-bridge.sh"
   fi
 }
+
+prepare_install_sh
 
 show_menu() {
   clear 2>/dev/null || true
