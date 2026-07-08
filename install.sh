@@ -182,12 +182,13 @@ start_container() {
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
   docker run -d \
     --name "$CONTAINER_NAME" \
-    --restart unless-stopped \
+    --restart on-failure:5 \
     --network host \
     --env-file "$WORK_DIR/.env" \
     -v "$WORK_DIR/.migpt.js:/app/.migpt.js:ro" \
     "$IMAGE" >/dev/null
   log "免刷机小爱服务已启动。首次登录可能需要稍等片刻。"
+  log "如果日志提示小米账号安全验证，请先完成网页授权，等待生效后再运行重建服务。"
   log "查看日志: docker logs -f $CONTAINER_NAME"
 }
 
