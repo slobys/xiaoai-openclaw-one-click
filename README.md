@@ -96,12 +96,68 @@ docker stop xiaoai-openclaw
 在安装了 OpenClaw 的设备运行菜单 `4` 部署 API bridge，然后把免刷机服务配置为：
 
 ```env
-OPENAI_BASE_URL=http://OpenClaw设备IP:11435/v1
-OPENAI_API_KEY=xiaoai-local
-OPENAI_MODEL=open
+XIAOAI_DEFAULT_PROVIDER=openclaw
+OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
+OPENCLAW_API_KEY=xiaoai-local
+OPENCLAW_DISPLAY_MODEL=open
 ```
 
 修改后运行菜单 `3` 重建服务。
+
+## 多模型切换
+
+免刷机版已移植旧刷机版的多模型入口。配置文件是 `/opt/xiaoai-openclaw/.env`，改完后运行菜单 `3` 重建服务。
+
+OpenClaw：
+
+```env
+XIAOAI_DEFAULT_PROVIDER=openclaw
+OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
+OPENCLAW_API_KEY=xiaoai-local
+OPENCLAW_DISPLAY_MODEL=open
+```
+
+Ollama：
+
+```env
+OLLAMA_BASE_URL=http://电脑IP:11434/v1
+OLLAMA_MODEL=qwen3:4b
+```
+
+DeepSeek：
+
+```env
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_MODEL=deepseek-chat
+```
+
+OpenAI 或其他 OpenAI-compatible：
+
+```env
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
+
+Gemini：
+
+```env
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.0-flash
+```
+
+语音口令：
+
+```text
+切换open
+切换ollama
+切换deepseek
+切换openai
+切换gemini
+当前模型
+测试模型
+清空上下文
+```
 
 ## 兼容性
 
