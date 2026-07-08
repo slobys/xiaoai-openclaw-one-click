@@ -1,0 +1,27 @@
+# ===== 免刷机账号配置 =====
+# MI_USER：小米 ID，不是手机号或邮箱。
+MI_USER=
+# MI_PASS：小米账号密码；使用 passToken Cookie 时可留空。
+MI_PASS=
+# MI_PASS_TOKEN：浏览器已登录小米账号后的 passToken Cookie，可填 passToken 值或整段 Cookie。
+MI_PASS_TOKEN=
+# MI_DID：米家中的音箱名称或设备 DID。
+MI_DID=
+# XIAOAI_HARDWARE：音箱型号代码，例如 LX06、L05B、OH2P。
+XIAOAI_HARDWARE=LX06
+
+# ===== 语音触发 =====
+# 问AI/问小爱：单次问答；开启AI/开启小爱：进入连续对话。
+XIAOAI_CALL_KEYWORD=问AI
+XIAOAI_WAKE_KEYWORD=开启AI
+XIAOAI_EXIT_KEYWORD=关闭AI
+XIAOAI_STREAM_RESPONSE=true
+XIAOAI_DEBUG=false
+
+# ===== 运行参数 =====
+# 模型来源、API Key 和模型名请改 /opt/open-xiaoai-migpt/config.ts。
+CONVERSATION_TURNS=6
+LLM_TIMEOUT_MS=30000
+OPENCLAW_TIMEOUT_MS=90000
+OPENCLAW_TEST_TIMEOUT_MS=30000
+OLLAMA_TIMEOUT_MS=90000
