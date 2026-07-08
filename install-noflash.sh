@@ -307,6 +307,49 @@ normalize_env_file() {
   chmod 600 "$ENV_FILE"
 }
 
+patch_config_for_migpt_openai_env() {
+  [ -f "$CONFIG_FILE" ] || return 0
+  if grep -q "applyProviderToMiGPTEnv" "$CONFIG_FILE"; then
+    return 0
+  fi
+  tmp="$CONFIG_FILE.tmp.$$"
+  awk '
+    BEGIN { in_switch = 0; inserted_initial = 0; inserted_switch = 0 }
+    {
+      print
+      if (!inserted_initial && $0 ~ /^globalThis\.__xiaoai_llm_state = llmState;$/) {
+        print "applyProviderToMiGPTEnv(llmState.provider);"
+        inserted_initial = 1
+      }
+      if ($0 ~ /^function switchProvider\(provider\)/) {
+        in_switch = 1
+      }
+      if (in_switch && !inserted_switch && $0 ~ /llmState\.messages = \[\];/) {
+        print "  applyProviderToMiGPTEnv(provider);"
+        inserted_switch = 1
+      }
+      if (in_switch && $0 ~ /^}/) {
+        in_switch = 0
+      }
+    }
+    END {
+      print ""
+      print "function applyProviderToMiGPTEnv(provider) {"
+      print "  const p = providers[provider];"
+      print "  if (!p || p.kind !== \"openai\") return false;"
+      print "  if (!p.baseURL || !p.model) return false;"
+      print "  process.env.OPENAI_BASE_URL = p.baseURL;"
+      print "  process.env.OPENAI_API_KEY = p.apiKey || \"dummy\";"
+      print "  process.env.OPENAI_MODEL = p.model;"
+      print "  return true;"
+      print "}"
+    }
+  ' "$CONFIG_FILE" > "$tmp"
+  mv "$tmp" "$CONFIG_FILE"
+  chmod 600 "$CONFIG_FILE"
+  log "已给 $CONFIG_FILE 补充 MiGPT 内置 OpenAI 环境同步逻辑"
+}
+
 set_env() {
   key="$1"
   value="$2"
@@ -442,6 +485,7 @@ prepare_files() {
     fetch_template "templates/config-noflash.ts" "$CONFIG_FILE"
     chmod 600 "$CONFIG_FILE"
   fi
+  patch_config_for_migpt_openai_env
   ln -sf "$(basename "$CONFIG_FILE")" "$WORK_DIR/.migpt.js" 2>/dev/null || true
   ln -sf "$(basename "$ENV_FILE")" "$WORK_DIR/.env" 2>/dev/null || true
   [ -s "$WORK_DIR/.mi.json" ] || printf '{}\n' > "$WORK_DIR/.mi.json"

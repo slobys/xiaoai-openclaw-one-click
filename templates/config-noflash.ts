@@ -194,6 +194,7 @@ const llmState = globalThis.__xiaoai_llm_state || {
   messages: [],
 };
 globalThis.__xiaoai_llm_state = llmState;
+applyProviderToMiGPTEnv(llmState.provider);
 
 function normalizeProvider(value) {
   const cmd = normalizeCommand(value);
@@ -219,6 +220,16 @@ function providerReady(provider) {
 
 function providerName(provider) {
   return providers[provider]?.label || provider;
+}
+
+function applyProviderToMiGPTEnv(provider) {
+  const p = providers[provider];
+  if (!p || p.kind !== "openai") return false;
+  if (!p.baseURL || !p.model) return false;
+  env.OPENAI_BASE_URL = p.baseURL;
+  env.OPENAI_API_KEY = p.apiKey || "dummy";
+  env.OPENAI_MODEL = p.model;
+  return true;
 }
 
 function currentProvider() {
@@ -336,6 +347,10 @@ function switchProvider(provider) {
   if (!providers[provider]) return `未知模型：${provider}`;
   llmState.provider = provider;
   llmState.messages = [];
+  applyProviderToMiGPTEnv(provider);
+  if (providers[provider].kind === "gemini") {
+    return `已切换到 ${providerName(provider)}。注意：连续对话由 MiGPT 内置 OpenAI 接口接管，Gemini 建议用“问AI...”单次问答。`;
+  }
   if (!providerReady(provider)) return `已切换到 ${providerName(provider)}，但还没配置接口或 Key。`;
   return `已切换到 ${providerName(provider)}。`;
 }
