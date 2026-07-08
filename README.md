@@ -2,7 +2,7 @@
 
 小爱音箱接入 DeepSeek / OpenAI / Gemini / OpenClaw / Ollama 的一键脚本。
 
-这是原刷机版 `open-xiaoai-migpt` 方案的免刷机版：保留原来的多模型配置、语音切换和软路由部署思路，把“音箱刷补丁 + SSH client”替换成“小米账号 + MiGPT 云端免刷机登录”。
+这是原刷机版 `open-xiaoai-migpt` 方案的免刷机版：保留原来的 `config.ts`、多模型配置、语音切换和软路由部署思路，把“音箱刷补丁 + SSH client”替换成“小米账号 + MiGPT 云端免刷机登录”。
 
 ## 一键菜单
 
@@ -58,10 +58,10 @@ sh bootstrap.sh
 2) 修改小米账号/音箱基础配置
 ```
 
-这个菜单不会再问 DeepSeek、OpenAI、Gemini、OpenClaw、Ollama 的 Key。模型配置直接编辑：
+这个菜单不会再问 DeepSeek、OpenAI、Gemini、OpenClaw、Ollama 的 Key。模型配置按旧教程直接编辑：
 
 ```sh
-vi /opt/open-xiaoai-migpt/migpt.env
+vi /opt/open-xiaoai-migpt/config.ts
 ```
 
 改完后选：
@@ -73,8 +73,9 @@ vi /opt/open-xiaoai-migpt/migpt.env
 ## 文件位置
 
 - 工作目录：`/opt/open-xiaoai-migpt`
-- 模型和账号配置：`/opt/open-xiaoai-migpt/migpt.env`
-- 免刷机 MiGPT 配置：`/opt/open-xiaoai-migpt/.migpt.js`
+- 模型配置：`/opt/open-xiaoai-migpt/config.ts`
+- 账号和免刷机基础配置：`/opt/open-xiaoai-migpt/migpt.env`
+- MiGPT 兼容入口：`/opt/open-xiaoai-migpt/.migpt.js`，指向 `config.ts`
 - 小米登录缓存：`/opt/open-xiaoai-migpt/.mi.json`
 - OpenClaw bridge：`/opt/openclaw-llm-bridge`
 
@@ -82,51 +83,61 @@ vi /opt/open-xiaoai-migpt/migpt.env
 
 ## 模型配置
 
-`migpt.env` 按旧版思路分开配置。
+打开 `/opt/open-xiaoai-migpt/config.ts`，在文件顶部的 `CONFIG.providers` 里填写。
 
 默认模型：
 
-```env
-XIAOAI_DEFAULT_PROVIDER=deepseek
+```ts
+defaultProvider: "deepseek",
 ```
 
 DeepSeek：
 
-```env
-DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
-DEEPSEEK_API_KEY=sk-...
-DEEPSEEK_MODEL=deepseek-chat
+```ts
+deepseek: {
+  baseURL: "https://api.deepseek.com/v1",
+  apiKey: "sk-...",
+  model: "deepseek-chat",
+},
 ```
 
 OpenAI：
 
-```env
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
+```ts
+openai: {
+  baseURL: "https://api.openai.com/v1",
+  apiKey: "sk-...",
+  model: "gpt-4o-mini",
+},
 ```
 
 Gemini：
 
-```env
-GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-2.0-flash
+```ts
+gemini: {
+  apiKey: "...",
+  model: "gemini-2.0-flash",
+},
 ```
 
 OpenClaw：
 
-```env
-OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
-OPENCLAW_API_KEY=xiaoai-local
-OPENCLAW_DISPLAY_MODEL=open
+```ts
+openclaw: {
+  baseURL: "http://OpenClaw设备IP:11435/v1",
+  apiKey: "xiaoai-local",
+  model: "open",
+},
 ```
 
 Ollama：
 
-```env
-OLLAMA_BASE_URL=http://电脑IP:11434/v1
-OLLAMA_API_KEY=ollama
-OLLAMA_MODEL=qwen3:4b
+```ts
+ollama: {
+  baseURL: "http://电脑IP:11434/v1",
+  apiKey: "ollama",
+  model: "qwen3:4b",
+},
 ```
 
 ## OpenClaw Bridge
@@ -137,12 +148,14 @@ OLLAMA_MODEL=qwen3:4b
 4) 部署 OpenClaw API Bridge（在 OpenClaw 设备运行）
 ```
 
-然后在软路由/NAS 的 `/opt/open-xiaoai-migpt/migpt.env` 填：
+然后在软路由/NAS 的 `/opt/open-xiaoai-migpt/config.ts` 填：
 
-```env
-OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
-OPENCLAW_API_KEY=xiaoai-local
-OPENCLAW_DISPLAY_MODEL=open
+```ts
+openclaw: {
+  baseURL: "http://OpenClaw设备IP:11435/v1",
+  apiKey: "xiaoai-local",
+  model: "open",
+},
 ```
 
 健康检查：

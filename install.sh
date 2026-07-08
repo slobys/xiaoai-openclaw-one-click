@@ -5,6 +5,7 @@ APP_NAME="xiaoai-openclaw"
 WORK_DIR="${XIAOAI_OPENCLAW_WORK_DIR:-/opt/open-xiaoai-migpt}"
 OLD_WORK_DIR="/opt/${APP_NAME}"
 ENV_FILE="$WORK_DIR/migpt.env"
+CONFIG_FILE="$WORK_DIR/config.ts"
 CONTAINER_NAME="${APP_NAME}"
 IMAGE="${MIGPT_IMAGE:-idootop/mi-gpt:latest}"
 BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
@@ -235,57 +236,45 @@ normalize_env_file() {
   fi
 
   {
-    printf '\n%s\n' '# ===== 默认模型和上下文 ====='
-    printf '%s\n' '# 可选：deepseek / openai / gemini / openclaw / ollama'
+    printf '\n%s\n' '# ===== 运行参数 ====='
+    printf '%s\n' '# 模型来源、API Key 和模型名请改 /opt/open-xiaoai-migpt/config.ts。'
   } >> "$tmp"
-  append_env_line "XIAOAI_DEFAULT_PROVIDER" "deepseek" "$tmp"
   append_env_line "CONVERSATION_TURNS" "6" "$tmp"
   append_env_line "LLM_TIMEOUT_MS" "30000" "$tmp"
-
-  {
-    printf '\n%s\n' '# ===== DeepSeek ====='
-    printf '%s\n' '# 说“切换deepseek”后使用。'
-  } >> "$tmp"
-  append_env_value "DEEPSEEK_BASE_URL" "$deepseek_base" "$tmp"
-  append_env_value "DEEPSEEK_API_KEY" "$deepseek_key" "$tmp"
-  append_env_value "DEEPSEEK_MODEL" "$deepseek_model" "$tmp"
-
-  {
-    printf '\n%s\n' '# ===== OpenAI ====='
-    printf '%s\n' '# 说“切换openai”后使用。兼容服务可把 BASE_URL 改成自己的 /v1 地址。'
-  } >> "$tmp"
-  append_env_value "OPENAI_BASE_URL" "$openai_base" "$tmp"
-  append_env_value "OPENAI_API_KEY" "$openai_key" "$tmp"
-  append_env_value "OPENAI_MODEL" "$openai_model" "$tmp"
-
-  {
-    printf '\n%s\n' '# ===== Gemini ====='
-    printf '%s\n' '# 说“切换gemini”或“切换谷歌”后使用。'
-  } >> "$tmp"
-  append_env_line "GEMINI_API_KEY" "" "$tmp"
-  append_env_line "GEMINI_MODEL" "gemini-2.0-flash" "$tmp"
-
-  {
-    printf '\n%s\n' '# ===== OpenClaw ====='
-    printf '%s\n' '# 说“切换open”后使用。菜单 4 部署 Bridge 后填 http://OpenClaw设备IP:11435/v1。'
-  } >> "$tmp"
-  append_env_value "OPENCLAW_BASE_URL" "$openclaw_base" "$tmp"
-  append_env_value "OPENCLAW_API_KEY" "$openclaw_key" "$tmp"
-  append_env_value "OPENCLAW_DISPLAY_MODEL" "$openclaw_model" "$tmp"
-  if [ -n "$(env_value "OPENCLAW_MODEL")" ]; then
-    append_env_line "OPENCLAW_MODEL" "" "$tmp"
-  fi
   append_env_line "OPENCLAW_TIMEOUT_MS" "90000" "$tmp"
   append_env_line "OPENCLAW_TEST_TIMEOUT_MS" "30000" "$tmp"
-
-  {
-    printf '\n%s\n' '# ===== Ollama ====='
-    printf '%s\n' '# 说“切换ollama”后使用。'
-  } >> "$tmp"
-  append_env_line "OLLAMA_BASE_URL" "" "$tmp"
-  append_env_line "OLLAMA_API_KEY" "ollama" "$tmp"
-  append_env_line "OLLAMA_MODEL" "qwen3:4b" "$tmp"
   append_env_line "OLLAMA_TIMEOUT_MS" "90000" "$tmp"
+
+  compat_header_written=0
+  append_compat_env() {
+    key="$1"
+    value="$2"
+    [ -n "$value" ] || return 0
+    if [ "$compat_header_written" -eq 0 ]; then
+      {
+        printf '\n%s\n' '# ===== 兼容旧模型变量 ====='
+        printf '%s\n' '# 新配置请优先改 /opt/open-xiaoai-migpt/config.ts；这里仅保留旧版本已经填写的值。'
+      } >> "$tmp"
+      compat_header_written=1
+    fi
+    append_env_value "$key" "$value" "$tmp"
+  }
+  append_compat_env "XIAOAI_DEFAULT_PROVIDER" "$(env_value "XIAOAI_DEFAULT_PROVIDER")"
+  append_compat_env "DEEPSEEK_BASE_URL" "$(env_value "DEEPSEEK_BASE_URL")"
+  append_compat_env "DEEPSEEK_API_KEY" "$(env_value "DEEPSEEK_API_KEY")"
+  append_compat_env "DEEPSEEK_MODEL" "$(env_value "DEEPSEEK_MODEL")"
+  append_compat_env "OPENAI_BASE_URL" "$(env_value "OPENAI_BASE_URL")"
+  append_compat_env "OPENAI_API_KEY" "$(env_value "OPENAI_API_KEY")"
+  append_compat_env "OPENAI_MODEL" "$(env_value "OPENAI_MODEL")"
+  append_compat_env "GEMINI_API_KEY" "$(env_value "GEMINI_API_KEY")"
+  append_compat_env "GEMINI_MODEL" "$(env_value "GEMINI_MODEL")"
+  append_compat_env "OPENCLAW_BASE_URL" "$(env_value "OPENCLAW_BASE_URL")"
+  append_compat_env "OPENCLAW_API_KEY" "$(env_value "OPENCLAW_API_KEY")"
+  append_compat_env "OPENCLAW_DISPLAY_MODEL" "$(env_value "OPENCLAW_DISPLAY_MODEL")"
+  append_compat_env "OPENCLAW_MODEL" "$(env_value "OPENCLAW_MODEL")"
+  append_compat_env "OLLAMA_BASE_URL" "$(env_value "OLLAMA_BASE_URL")"
+  append_compat_env "OLLAMA_API_KEY" "$(env_value "OLLAMA_API_KEY")"
+  append_compat_env "OLLAMA_MODEL" "$(env_value "OLLAMA_MODEL")"
 
   extra_header_written=0
   while IFS= read -r line || [ -n "$line" ]; do
@@ -441,7 +430,11 @@ prepare_files() {
     chmod 600 "$ENV_FILE"
   fi
   normalize_env_file
-  fetch_template "templates/migpt-account.js" "$WORK_DIR/.migpt.js"
+  if [ ! -f "$CONFIG_FILE" ]; then
+    fetch_template "templates/config.ts" "$CONFIG_FILE"
+    chmod 600 "$CONFIG_FILE"
+  fi
+  ln -sf "$(basename "$CONFIG_FILE")" "$WORK_DIR/.migpt.js" 2>/dev/null || true
   ln -sf "$(basename "$ENV_FILE")" "$WORK_DIR/.env" 2>/dev/null || true
   [ -s "$WORK_DIR/.mi.json" ] || printf '{}\n' > "$WORK_DIR/.mi.json"
   chmod 600 "$WORK_DIR/.mi.json"
@@ -457,7 +450,7 @@ configure() {
   ask "XIAOAI_HARDWARE" "音箱型号代码（例如 LX06、L05B、OH2P）"
   ask "XIAOAI_STREAM_RESPONSE" "是否开启连续对话（true/false）"
   log "基础配置已保存到 $ENV_FILE"
-  log "模型配置也在 $ENV_FILE，按 DeepSeek/OpenAI/Gemini/OpenClaw/Ollama 分段编辑，然后运行菜单 3 重建服务。"
+  log "模型配置在 $CONFIG_FILE，按旧教程打开 config.ts 添加 API Key，然后运行菜单 3 重建服务。"
   log "已有服务时，请运行重建服务使新配置生效。"
 }
 
@@ -480,7 +473,7 @@ start_container() {
     --restart on-failure:5 \
     --network host \
     --env-file "$ENV_FILE" \
-    -v "$WORK_DIR/.migpt.js:/app/.migpt.js:ro" \
+    -v "$CONFIG_FILE:/app/.migpt.js:ro" \
     -v "$WORK_DIR/.mi.json:/app/.mi.json" \
     "$IMAGE" >/dev/null
   log "免刷机小爱服务已启动。首次登录可能需要稍等片刻。"

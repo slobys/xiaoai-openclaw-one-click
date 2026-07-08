@@ -1,4 +1,68 @@
+// /opt/open-xiaoai-migpt/config.ts
+//
+// 这是旧刷机版教程里的主配置入口。免刷机版仍然让你改这个文件：
+// - 小米账号、音箱名称、passToken 等基础信息由菜单写入 migpt.env
+// - DeepSeek / OpenAI / Gemini / OpenClaw / Ollama 在这里配置
+// - 这个文件会被 Docker 挂载为 MiGPT 需要的 /app/.migpt.js
+
 const env = process.env;
+const DEFAULT_SYSTEM_PROMPT =
+  "你是运行在智能音箱上的语音助手。请使用中文直接回答，内容准确、自然、简短，避免 Markdown 和冗长列表。";
+
+const CONFIG = {
+  // 默认模型来源：deepseek / openai / gemini / openclaw / ollama
+  defaultProvider: "deepseek",
+
+  // 智能音箱回答风格
+  systemPrompt: DEFAULT_SYSTEM_PROMPT,
+
+  providers: {
+    // 说“切换deepseek”后使用
+    deepseek: {
+      baseURL: "https://api.deepseek.com/v1",
+      apiKey: "",
+      model: "deepseek-chat",
+    },
+
+    // 说“切换openai”后使用；兼容服务可把 baseURL 改成自己的 /v1 地址
+    openai: {
+      baseURL: "https://api.openai.com/v1",
+      apiKey: "",
+      model: "gpt-4o-mini",
+    },
+
+    // 说“切换gemini”或“切换谷歌”后使用
+    gemini: {
+      apiKey: "",
+      model: "gemini-2.0-flash",
+    },
+
+    // 说“切换open”后使用；菜单 4 部署 Bridge 后填 http://OpenClaw设备IP:11435/v1
+    openclaw: {
+      baseURL: "",
+      apiKey: "xiaoai-local",
+      model: "open",
+    },
+
+    // 说“切换ollama”后使用
+    ollama: {
+      baseURL: "",
+      apiKey: "ollama",
+      model: "qwen3:4b",
+    },
+  },
+};
+
+function pick(value, fallback) {
+  return value === undefined || value === null || value === "" ? fallback : value;
+}
+
+function choose(configValue, envValue, defaultValue) {
+  if (envValue && (configValue === undefined || configValue === null || configValue === "" || configValue === defaultValue)) {
+    return envValue;
+  }
+  return pick(configValue, defaultValue);
+}
 
 const commandMap = {
   OH2P: { tts: [7, 3], wake: [7, 1] },
@@ -61,17 +125,15 @@ const callAIKeywords = keywords(env.XIAOAI_CALL_KEYWORD, [
 const wakeUpKeywords = keywords(env.XIAOAI_WAKE_KEYWORD, ["打开AI", "开启AI", "开启小爱"]);
 const exitKeywords = keywords(env.XIAOAI_EXIT_KEYWORD, ["关闭AI", "退出AI", "关闭小爱"]);
 
-const systemPrompt =
-  env.XIAOAI_SYSTEM_PROMPT ||
-  "你是运行在智能音箱上的语音助手。请使用中文直接回答，内容准确、自然、简短，避免 Markdown 和冗长列表。";
+const systemPrompt = choose(CONFIG.systemPrompt, env.XIAOAI_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT);
 const conversationTurns = envInt("CONVERSATION_TURNS", 6);
 const requestTimeoutMs = envInt("LLM_TIMEOUT_MS", 30000);
 const openclawTimeoutMs = envInt("OPENCLAW_TIMEOUT_MS", 90000);
 const openclawTestTimeoutMs = envInt("OPENCLAW_TEST_TIMEOUT_MS", 30000);
 const ollamaTimeoutMs = envInt("OLLAMA_TIMEOUT_MS", 90000);
 
-const openAIBaseURL = env.OPENAI_BASE_URL || "https://api.openai.com/v1";
-const openAIModel = env.OPENAI_MODEL || "gpt-4o-mini";
+const openAIBaseURL = choose(CONFIG.providers.openai.baseURL, env.OPENAI_BASE_URL, "https://api.openai.com/v1");
+const openAIModel = choose(CONFIG.providers.openai.model, env.OPENAI_MODEL, "gpt-4o-mini");
 const looksLikeOpenClawCompat =
   /(^|\/)(open|openclaw)$/i.test(openAIModel) || /:11435(\/|$)/.test(openAIBaseURL);
 
@@ -79,41 +141,45 @@ const providers = {
   deepseek: {
     label: "deepseek",
     kind: "openai",
-    baseURL: env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
-    apiKey: env.DEEPSEEK_API_KEY || "",
-    model: env.DEEPSEEK_MODEL || "deepseek-chat",
+    baseURL: choose(CONFIG.providers.deepseek.baseURL, env.DEEPSEEK_BASE_URL, "https://api.deepseek.com/v1"),
+    apiKey: choose(CONFIG.providers.deepseek.apiKey, env.DEEPSEEK_API_KEY, ""),
+    model: choose(CONFIG.providers.deepseek.model, env.DEEPSEEK_MODEL, "deepseek-chat"),
   },
   openai: {
     label: "openai",
     kind: "openai",
     baseURL: openAIBaseURL,
-    apiKey: env.OPENAI_API_KEY || "",
+    apiKey: choose(CONFIG.providers.openai.apiKey, env.OPENAI_API_KEY, ""),
     model: openAIModel,
   },
   gemini: {
     label: "gemini",
     kind: "gemini",
-    apiKey: env.GEMINI_API_KEY || "",
-    model: env.GEMINI_MODEL || "gemini-2.0-flash",
+    apiKey: choose(CONFIG.providers.gemini.apiKey, env.GEMINI_API_KEY, ""),
+    model: choose(CONFIG.providers.gemini.model, env.GEMINI_MODEL, "gemini-2.0-flash"),
   },
   openclaw: {
     label: "open",
     kind: "openai",
-    baseURL: env.OPENCLAW_BASE_URL || (looksLikeOpenClawCompat ? openAIBaseURL : ""),
-    apiKey: env.OPENCLAW_API_KEY || (looksLikeOpenClawCompat ? env.OPENAI_API_KEY : "") || "xiaoai-local",
-    model: env.OPENCLAW_DISPLAY_MODEL || env.OPENCLAW_MODEL || "open",
+    baseURL: choose(CONFIG.providers.openclaw.baseURL, env.OPENCLAW_BASE_URL || (looksLikeOpenClawCompat ? openAIBaseURL : ""), ""),
+    apiKey: choose(
+      CONFIG.providers.openclaw.apiKey,
+      env.OPENCLAW_API_KEY || (looksLikeOpenClawCompat ? env.OPENAI_API_KEY : ""),
+      "xiaoai-local"
+    ),
+    model: choose(CONFIG.providers.openclaw.model, env.OPENCLAW_DISPLAY_MODEL || env.OPENCLAW_MODEL, "open"),
   },
   ollama: {
     label: "ollama",
     kind: "openai",
-    baseURL: env.OLLAMA_BASE_URL || "",
-    apiKey: env.OLLAMA_API_KEY || "ollama",
-    model: env.OLLAMA_MODEL || "qwen3:4b",
+    baseURL: choose(CONFIG.providers.ollama.baseURL, env.OLLAMA_BASE_URL, ""),
+    apiKey: choose(CONFIG.providers.ollama.apiKey, env.OLLAMA_API_KEY, "ollama"),
+    model: choose(CONFIG.providers.ollama.model, env.OLLAMA_MODEL, "qwen3:4b"),
   },
 };
 
 function initialProvider() {
-  const configured = normalizeProvider(env.XIAOAI_DEFAULT_PROVIDER || "");
+  const configured = normalizeProvider(choose(CONFIG.defaultProvider, env.XIAOAI_DEFAULT_PROVIDER, "deepseek"));
   if (configured) return configured;
   if (providers.openclaw.baseURL) return "openclaw";
   if (providers.ollama.baseURL) return "ollama";
@@ -317,8 +383,7 @@ const providerCommands = {
 };
 
 export default {
-  systemTemplate:
-    "你是运行在智能音箱上的语音助手。请使用中文直接回答，内容准确、自然、简短，避免 Markdown 和冗长列表。\n\n最近对话：\n{{messages}}",
+  systemTemplate: `${systemPrompt}\n\n最近对话：\n{{messages}}`,
   bot: { name: "AI助手", profile: "简洁、可靠的语音助手" },
   master: { name: "用户", profile: "" },
   speaker: {
