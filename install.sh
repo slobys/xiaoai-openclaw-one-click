@@ -373,6 +373,25 @@ patch_existing_config_defaults() {
     mv "$tmp_file" "$config_file"
     log "已更新 config.ts 中的 DeepSeek 接口地址"
   fi
+  if ! grep -q 'FETCH_FAILED:' "$config_file" && grep -q 'const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal });' "$config_file"; then
+    tmp_file="${config_file}.tmp.$$"
+    awk '
+      /const res = await fetch\(url, \{ method: "POST", headers, body: JSON.stringify\(body\), signal \}\);/ {
+        print "  let res: Response;"
+        print "  try {"
+        print "    res = await fetch(url, { method: \"POST\", headers, body: JSON.stringify(body), signal });"
+        print "  } catch (err: any) {"
+        print "    const cause = err?.cause;"
+        print "    const detail = cause?.code || cause?.message || err?.message || \"fetch failed\";"
+        print "    throw new Error(`FETCH_FAILED:${detail}`);"
+        print "  }"
+        next
+      }
+      { print }
+    ' "$config_file" > "$tmp_file"
+    mv "$tmp_file" "$config_file"
+    log "已增强 config.ts 中的网络错误日志"
+  fi
 }
 
 install_server() {
