@@ -235,6 +235,13 @@ function hasKeyFor(p: Provider) {
   if (p === "ollama") return !!DEFAULT_MODELS.ollama.baseURL;
   return !!KEYS.DEEPSEEK;
 }
+function explainError(msg: string) {
+  if (msg.includes("EAI_AGAIN")) return `${msg}（DNS 解析临时失败，容器无法解析接口域名）`;
+  if (msg.includes("ENOTFOUND")) return `${msg}（DNS 解析失败，域名不存在或 DNS 不通）`;
+  if (msg.includes("ETIMEDOUT")) return `${msg}（连接超时，网络出口可能不通）`;
+  if (msg.includes("ECONNRESET")) return `${msg}（连接被重置，可能被网络中断或代理拦截）`;
+  return msg;
+}
 function timeoutForProvider(p: Provider, baseTimeoutMs: number) {
   if (p === "openclaw") return baseTimeoutMs === TEST_TIMEOUT_MS ? OPENCLAW_TEST_TIMEOUT_MS : OPENCLAW_TIMEOUT_MS;
   return p === "ollama" ? OLLAMA_TIMEOUT_MS : baseTimeoutMs;
@@ -946,12 +953,13 @@ export const kOpenXiaoAIConfig = {
         } catch (e: any) {
           clearTimeout(timer);
           const msg = String(e?.message || "unknown_error");
+          const friendlyMsg = explainError(msg);
           diag.last = { provider: cur.provider, model: cur.model, ok: false, ms: nowMs() - t0, at: nowMs(), err: msg };
           logE(msg);
           if (timedOut) {
             startSpeak(engine, mySeq, `连通超时：${providerDisplayName(cur.provider)}/${cur.model} 超过 ${Math.round(timeoutMs / 1000)} 秒没有返回。`);
           } else {
-            startSpeak(engine, mySeq, `连通失败：${providerDisplayName(cur.provider)}/${cur.model}，原因：${msg}`);
+            startSpeak(engine, mySeq, `连通失败：${providerDisplayName(cur.provider)}/${cur.model}，原因：${friendlyMsg}`);
           }
         }
       })();
