@@ -8,6 +8,8 @@ NOFLASH_SH="$SCRIPT_DIR/install-noflash.sh"
 BRIDGE_SH=""
 BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
 CN_BASE_URL="${XIAOAI_OPENCLAW_CN_BASE_URL:-https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main}"
+GH_BASE_URL="https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main"
+GH_PROXY_BASE_URL="https://gh-proxy.com/https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main"
 TMP_DIR="/tmp/${PROJECT_NAME}-one-click"
 
 fetch() {
@@ -30,9 +32,14 @@ cache_bust_url() {
 fetch_from_mirrors() {
   path="$1"
   out="$2"
-  if ! fetch "$(cache_bust_url "$BASE_URL/$path")" "$out"; then
-    fetch "$(cache_bust_url "$CN_BASE_URL/$path")" "$out"
-  fi
+  for base in "$BASE_URL" "$CN_BASE_URL" "$GH_BASE_URL" "$GH_PROXY_BASE_URL"; do
+    [ -n "$base" ] || continue
+    if fetch "$(cache_bust_url "$base/$path")" "$out" 2>/dev/null; then
+      return 0
+    fi
+  done
+  echo "下载失败: $path" >&2
+  return 1
 }
 
 if [ ! -f "$INSTALL_SH" ]; then
