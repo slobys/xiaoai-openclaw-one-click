@@ -237,7 +237,7 @@ normalize_env_file() {
   append_env_line "XIAOAI_CALL_KEYWORD" "问AI" "$tmp"
   append_env_line "XIAOAI_WAKE_KEYWORD" "开启AI" "$tmp"
   append_env_line "XIAOAI_EXIT_KEYWORD" "关闭AI" "$tmp"
-  append_env_line "XIAOAI_STREAM_RESPONSE" "true" "$tmp"
+  append_env_value "XIAOAI_STREAM_RESPONSE" "true" "$tmp"
   append_env_line "XIAOAI_DEBUG" "false" "$tmp"
   if [ -n "$(env_value "XIAOAI_SYSTEM_PROMPT")" ]; then
     append_env_line "XIAOAI_SYSTEM_PROMPT" "" "$tmp"
@@ -541,7 +541,7 @@ configure() {
   ask_secret "MI_PASS_TOKEN" "小米 passToken Cookie（可选，建议从已登录浏览器复制）"
   ask "MI_DID" "米家中的音箱名称或 DID"
   ask "XIAOAI_HARDWARE" "音箱型号代码（例如 LX06、L05B、OH2P）"
-  ask "XIAOAI_STREAM_RESPONSE" "是否开启连续对话（true/false）"
+  set_env "XIAOAI_STREAM_RESPONSE" "true"
   log "基础配置已保存到 $ENV_FILE"
   log "模型配置在 $CONFIG_FILE，按旧教程打开 config.ts 添加 API Key，然后运行菜单 3 重建服务。"
   log "已有服务时，请运行重建服务使新配置生效。"
