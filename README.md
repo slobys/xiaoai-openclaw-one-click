@@ -108,6 +108,12 @@ OPENCLAW_DISPLAY_MODEL=open
 
 免刷机版已移植旧刷机版的多模型入口。配置文件是 `/opt/xiaoai-openclaw/.env`，改完后运行菜单 `3` 重建服务。
 
+菜单 `1` / `2` 只配置小米账号、passToken、音箱名称、型号和连续对话开关。模型不要在交互菜单里填，直接编辑 `.env` 更直观。
+
+```sh
+vi /opt/xiaoai-openclaw/.env
+```
+
 OpenClaw：
 
 ```env
