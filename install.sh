@@ -352,6 +352,17 @@ update_env_if_blank_or_value() {
   update_env_if_provided "$env_file" "$key" "$new_value"
 }
 
+patch_existing_config_defaults() {
+  config_file="$WORK_DIR/config.ts"
+  [ -f "$config_file" ] || return 0
+  if grep -q 'deepseek: { model: "deepseek-chat", baseURL: "https://api.deepseek.com/v1" }' "$config_file"; then
+    tmp_file="${config_file}.tmp.$$"
+    sed 's/deepseek: { model: "deepseek-chat", baseURL: "https:\/\/api.deepseek.com\/v1" }/deepseek: { model: process.env.DEEPSEEK_MODEL || "deepseek-v4-flash", baseURL: "https:\/\/api.deepseek.com\/v1" }/' "$config_file" > "$tmp_file"
+    mv "$tmp_file" "$config_file"
+    log "已更新 config.ts 中的 DeepSeek 默认模型为 deepseek-v4-flash"
+  fi
+}
+
 install_server() {
   need_root
   mkdir -p "$WORK_DIR"
@@ -383,6 +394,8 @@ start_server_from_existing_config() {
   install_docker_if_needed
   [ -f "$WORK_DIR/.env" ] || die "缺少 $WORK_DIR/.env，请先部署服务器端"
   [ -f "$WORK_DIR/config.ts" ] || die "缺少 $WORK_DIR/config.ts，请先部署服务器端"
+  write_env_if_missing
+  patch_existing_config_defaults
 
   log "正在重建 Docker 容器以加载最新配置..."
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
