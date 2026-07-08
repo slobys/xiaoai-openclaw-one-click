@@ -78,6 +78,15 @@ SERVER_IP=192.168.2.1 xiaoai-openclaw
 CONVERSATION_TURNS=0
 ```
 
+## DeepSeek
+
+在 `/opt/xiaoai-openclaw/.env` 设置：
+
+```env
+DEEPSEEK_API_KEY=sk-xxxx
+DEEPSEEK_MODEL=deepseek-v4-flash
+```
+
 ## OpenClaw
 
 OpenClaw 不在 MiGPT 同一台设备时，在 OpenClaw 设备运行：

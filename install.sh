@@ -168,6 +168,7 @@ install_docker_if_needed() {
 write_env_if_missing() {
   env_file="$WORK_DIR/.env"
   if [ -f "$env_file" ]; then
+    append_env_if_missing "$env_file" "DEEPSEEK_MODEL" "${DEEPSEEK_MODEL:-deepseek-v4-flash}"
     append_env_if_missing "$env_file" "OPENCLAW_BASE_URL" "${OPENCLAW_BASE_URL:-http://192.168.2.238:11435/v1}"
     append_env_if_missing "$env_file" "OPENCLAW_API_KEY" "${OPENCLAW_API_KEY:-xiaoai-local}"
     append_env_if_missing "$env_file" "OPENCLAW_DISPLAY_MODEL" "${OPENCLAW_DISPLAY_MODEL:-open}"
@@ -183,6 +184,7 @@ write_env_if_missing() {
     remove_env_key "$env_file" "OLLAMA_TIMEOUT_MS"
     remove_env_key "$env_file" "OLLAMA_NUM_PREDICT"
     remove_env_key "$env_file" "OLLAMA_KEEP_ALIVE"
+    update_env_if_provided "$env_file" "DEEPSEEK_MODEL" "${DEEPSEEK_MODEL:-}"
     update_env_if_provided "$env_file" "OPENCLAW_BASE_URL" "${OPENCLAW_BASE_URL:-}"
     update_env_if_provided "$env_file" "OPENCLAW_API_KEY" "${OPENCLAW_API_KEY:-}"
     update_env_if_provided "$env_file" "OPENCLAW_DISPLAY_MODEL" "${OPENCLAW_DISPLAY_MODEL:-}"
@@ -198,6 +200,8 @@ write_env_if_missing() {
     update_env_if_blank_or_value "$env_file" "OLLAMA_BASE_URL" "http://192.168.2.193:11434/v1" ""
     update_env_if_blank_or_value "$env_file" "OLLAMA_MODEL" "qwen3:4b" ""
     update_env_if_blank_or_value "$env_file" "OLLAMA_MODEL" "qwen3:4b" "gemma3:latest"
+    update_env_if_blank_or_value "$env_file" "DEEPSEEK_MODEL" "deepseek-v4-flash" ""
+    update_env_if_blank_or_value "$env_file" "DEEPSEEK_MODEL" "deepseek-v4-flash" "deepseek-chat"
     annotate_env_file "$env_file"
     return 0
   fi
@@ -206,6 +210,8 @@ write_env_if_missing() {
   {
     printf '# DEEPSEEK_API_KEY：DeepSeek 官方 API Key；说“切换 deepseek”后使用。\n'
     printf 'DEEPSEEK_API_KEY=%s\n' "${DEEPSEEK_API_KEY:-}"
+    printf '# DEEPSEEK_MODEL：DeepSeek 模型名；默认使用 deepseek-v4-flash。\n'
+    printf 'DEEPSEEK_MODEL=%s\n' "${DEEPSEEK_MODEL:-deepseek-v4-flash}"
     printf '# OPENAI_API_KEY：OpenAI 官方或兼容接口 API Key；说“切换 openai”后使用。\n'
     printf 'OPENAI_API_KEY=%s\n' "${OPENAI_API_KEY:-}"
     printf '# GEMINI_API_KEY：Gemini API Key；说“切换 gemini”后使用。\n'
@@ -248,6 +254,7 @@ annotate_env_file() {
   awk '
     BEGIN {
       note["DEEPSEEK_API_KEY"] = "DeepSeek 官方 API Key；说“切换 deepseek”后使用。"
+      note["DEEPSEEK_MODEL"] = "DeepSeek 模型名；默认使用 deepseek-v4-flash。"
       note["OPENAI_API_KEY"] = "OpenAI 官方或兼容接口 API Key；说“切换 openai”后使用。"
       note["GEMINI_API_KEY"] = "Gemini API Key；说“切换 gemini”后使用。"
       note["OPENAI_BASE_URL"] = "OpenAI 接口地址；兼容服务可改成自己的 /v1 地址。"
@@ -264,14 +271,14 @@ annotate_env_file() {
       note["OLLAMA_MODEL"] = "Ollama 模型名；必须和 ollama list 里的模型名一致，说“切换 ollama”后使用。"
     }
     /^# ===== 参数说明 =====/ { skip_notes = 1; next }
-    skip_notes && /^# (DEEPSEEK_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_BASE_URL|CONVERSATION_TURNS|OPENCLAW_BASE_URL|OPENCLAW_API_KEY|OPENCLAW_DISPLAY_MODEL|OPENCLAW_TIMEOUT_MS|OPENCLAW_TEST_TIMEOUT_MS|SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|PREFIX_GATE_MODE|OLLAMA_BASE_URL|OLLAMA_MODEL)：/ { next }
+    skip_notes && /^# (DEEPSEEK_API_KEY|DEEPSEEK_MODEL|OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_BASE_URL|CONVERSATION_TURNS|OPENCLAW_BASE_URL|OPENCLAW_API_KEY|OPENCLAW_DISPLAY_MODEL|OPENCLAW_TIMEOUT_MS|OPENCLAW_TEST_TIMEOUT_MS|SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|PREFIX_GATE_MODE|OLLAMA_BASE_URL|OLLAMA_MODEL)：/ { next }
     skip_notes && /^$/ { next }
     skip_notes { skip_notes = 0 }
     /^# ===== (API Key 配置|OpenClaw 配置|小爱播报配置|Ollama 配置) =====/ { next }
     /^# 如果 OpenClaw 在另一台设备，OPENCLAW_BASE_URL 设置为:/ { next }
     /^# 如果 Ollama 在局域网电脑，OLLAMA_BASE_URL 设置为:/ { next }
-    /^# (DeepSeek 官方 API Key|OpenAI 官方或兼容接口 API Key|Gemini API Key|OpenAI 接口地址|连续对话保留轮数|OpenClaw API Bridge 地址|OpenClaw API Bridge 鉴权 Key|语音里显示\/切换用的模型名|OpenClaw 正常问答超时时间|“测试模型”命令的超时时间|每段最多字符数|每个字预估播报耗时|每段播报之间的额外间隔|前缀识别方式|Ollama OpenAI 兼容地址|Ollama 模型名)/ { next }
-    /^# (DEEPSEEK_API_KEY|OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_BASE_URL|CONVERSATION_TURNS|OPENCLAW_BASE_URL|OPENCLAW_API_KEY|OPENCLAW_DISPLAY_MODEL|OPENCLAW_TIMEOUT_MS|OPENCLAW_TEST_TIMEOUT_MS|SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|PREFIX_GATE_MODE|OLLAMA_BASE_URL|OLLAMA_MODEL)：/ { next }
+    /^# (DeepSeek 官方 API Key|DeepSeek 模型名|OpenAI 官方或兼容接口 API Key|Gemini API Key|OpenAI 接口地址|连续对话保留轮数|OpenClaw API Bridge 地址|OpenClaw API Bridge 鉴权 Key|语音里显示\/切换用的模型名|OpenClaw 正常问答超时时间|“测试模型”命令的超时时间|每段最多字符数|每个字预估播报耗时|每段播报之间的额外间隔|前缀识别方式|Ollama OpenAI 兼容地址|Ollama 模型名)/ { next }
+    /^# (DEEPSEEK_API_KEY|DEEPSEEK_MODEL|OPENAI_API_KEY|GEMINI_API_KEY|OPENAI_BASE_URL|CONVERSATION_TURNS|OPENCLAW_BASE_URL|OPENCLAW_API_KEY|OPENCLAW_DISPLAY_MODEL|OPENCLAW_TIMEOUT_MS|OPENCLAW_TEST_TIMEOUT_MS|SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|PREFIX_GATE_MODE|OLLAMA_BASE_URL|OLLAMA_MODEL)：/ { next }
     /^[A-Z0-9_]+=/ {
       key = $0
       sub(/=.*/, "", key)

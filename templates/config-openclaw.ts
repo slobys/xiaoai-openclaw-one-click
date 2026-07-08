@@ -162,7 +162,7 @@ const OPENCLAW_BASE_URL = process.env.OPENCLAW_BASE_URL || "";
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "";
 
 const DEFAULT_MODELS: Record<Provider, { model: string; baseURL?: string; fallbacks?: string[] }> = {
-  deepseek: { model: "deepseek-chat", baseURL: "https://api.deepseek.com/v1" },
+  deepseek: { model: process.env.DEEPSEEK_MODEL || "deepseek-v4-flash", baseURL: "https://api.deepseek.com/v1" },
   openai: { model: "gpt-4o-mini", baseURL: OPENAI_BASE_URL, fallbacks: ["gpt-5-nano", "gpt-4o-mini"] },
   gemini: { model: "gemini-3.1-flash-lite-preview", fallbacks: ["gemini-2.0-flash"] },
   openclaw: { model: process.env.OPENCLAW_DISPLAY_MODEL || "open", baseURL: OPENCLAW_BASE_URL },
