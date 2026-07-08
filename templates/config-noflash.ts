@@ -348,9 +348,6 @@ function switchProvider(provider) {
   llmState.provider = provider;
   llmState.messages = [];
   applyProviderToMiGPTEnv(provider);
-  if (providers[provider].kind === "gemini") {
-    return `已切换到 ${providerName(provider)}。注意：连续对话由 MiGPT 内置 OpenAI 接口接管，Gemini 建议用“问AI...”单次问答。`;
-  }
   if (!providerReady(provider)) return `已切换到 ${providerName(provider)}，但还没配置接口或 Key。`;
   return `已切换到 ${providerName(provider)}。`;
 }
@@ -397,6 +394,25 @@ const providerCommands = {
   },
 };
 
+const fallbackQACommand = {
+  match: (msg) => {
+    const text = String(msg?.text || "").trim();
+    if (!text) return false;
+    return !commandAction(text);
+  },
+  run: async (msg) => {
+    const userText = stripCallKeyword(msg.text);
+    const provider = currentProvider();
+    try {
+      const answer = await callLLM(provider, userText);
+      rememberTurn(userText, answer);
+      return { text: answer };
+    } catch (err) {
+      return { text: `${providerName(provider)} 调用失败：${err?.message || "未知错误"}` };
+    }
+  },
+};
+
 export default {
   systemTemplate: `${systemPrompt}\n\n最近对话：\n{{messages}}`,
   bot: { name: "AI助手", profile: "简洁、可靠的语音助手" },
@@ -413,7 +429,7 @@ export default {
     onAIAsking: [],
     onAIReplied: [],
     onAIError: ["连接模型失败，请稍后再试"],
-    commands: [providerCommands],
+    commands: [providerCommands, fallbackQACommand],
     askAI: async (msg) => {
       const userText = stripCallKeyword(msg.text);
       const provider = currentProvider();

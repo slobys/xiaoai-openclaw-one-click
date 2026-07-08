@@ -350,6 +350,46 @@ patch_config_for_migpt_openai_env() {
   log "已给 $CONFIG_FILE 补充 MiGPT 内置 OpenAI 环境同步逻辑"
 }
 
+patch_config_for_custom_qa_command() {
+  [ -f "$CONFIG_FILE" ] || return 0
+  if grep -q "fallbackQACommand" "$CONFIG_FILE"; then
+    return 0
+  fi
+  tmp="$CONFIG_FILE.tmp.$$"
+  awk '
+    {
+      if ($0 ~ /^export default \{/) {
+        print "const fallbackQACommand = {"
+        print "  match: (msg) => {"
+        print "    const text = String(msg?.text || \"\").trim();"
+        print "    if (!text) return false;"
+        print "    return !commandAction(text);"
+        print "  },"
+        print "  run: async (msg) => {"
+        print "    const userText = stripCallKeyword(msg.text);"
+        print "    const provider = currentProvider();"
+        print "    try {"
+        print "      const answer = await callLLM(provider, userText);"
+        print "      rememberTurn(userText, answer);"
+        print "      return { text: answer };"
+        print "    } catch (err) {"
+        print "      return { text: `${providerName(provider)} 调用失败：${err?.message || \"未知错误\"}` };"
+        print "    }"
+        print "  },"
+        print "};"
+        print ""
+      }
+      if ($0 ~ /commands: \[providerCommands\],/) {
+        sub(/commands: \[providerCommands\],/, "commands: [providerCommands, fallbackQACommand],")
+      }
+      print
+    }
+  ' "$CONFIG_FILE" > "$tmp"
+  mv "$tmp" "$CONFIG_FILE"
+  chmod 600 "$CONFIG_FILE"
+  log "已给 $CONFIG_FILE 补充连续对话自定义问答逻辑"
+}
+
 set_env() {
   key="$1"
   value="$2"
@@ -486,6 +526,7 @@ prepare_files() {
     chmod 600 "$CONFIG_FILE"
   fi
   patch_config_for_migpt_openai_env
+  patch_config_for_custom_qa_command
   ln -sf "$(basename "$CONFIG_FILE")" "$WORK_DIR/.migpt.js" 2>/dev/null || true
   ln -sf "$(basename "$ENV_FILE")" "$WORK_DIR/.env" 2>/dev/null || true
   [ -s "$WORK_DIR/.mi.json" ] || printf '{}\n' > "$WORK_DIR/.mi.json"
