@@ -53,16 +53,26 @@ sudo sh bootstrap.sh
 ```text
 问AI今天天气怎么样
 打开AI
+开启AI
+开启小爱
 关闭AI
 ```
 
-`问AI` 用于单次提问。部分音箱支持说 `打开AI` 后连续对话；需要在配置中设置：
+`问AI` 用于单次提问。`打开AI`、`开启AI`、`开启小爱` 用于进入连续对话。
 
-```env
-XIAOAI_STREAM_RESPONSE=true
+如果连续对话没有接管，先用单次问答测试：
+
+```text
+问AI你是谁
 ```
 
-如果连续对话异常，请保持 `false`。
+部分音箱连续对话异常时，可在配置中设置：
+
+```env
+XIAOAI_STREAM_RESPONSE=false
+```
+
+修改后运行菜单 `3` 重建服务。
 
 ## 小米账号安全验证
 

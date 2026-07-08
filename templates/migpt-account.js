@@ -22,7 +22,19 @@ const commandMap = {
 
 const hardware = (env.XIAOAI_HARDWARE || "LX06").toUpperCase();
 const commands = commandMap[hardware] || commandMap.LX06;
-const streamResponse = env.XIAOAI_STREAM_RESPONSE === "true";
+const streamResponse = env.XIAOAI_STREAM_RESPONSE !== "false";
+
+function keywords(value, defaults) {
+  const items = `${value || ""},${defaults.join(",")}`
+    .split(/[,，\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return [...new Set(items)];
+}
+
+const callAIKeywords = keywords(env.XIAOAI_CALL_KEYWORD, ["问AI", "问小爱"]);
+const wakeUpKeywords = keywords(env.XIAOAI_WAKE_KEYWORD, ["打开AI", "开启AI", "开启小爱"]);
+const exitKeywords = keywords(env.XIAOAI_EXIT_KEYWORD, ["关闭AI", "退出AI", "关闭小爱"]);
 
 export default {
   systemTemplate:
@@ -33,9 +45,9 @@ export default {
     userId: env.MI_USER,
     password: env.MI_PASS || "__cookie_login__",
     did: env.MI_DID,
-    callAIKeywords: [env.XIAOAI_CALL_KEYWORD || "问AI"],
-    wakeUpKeywords: [env.XIAOAI_WAKE_KEYWORD || "打开AI"],
-    exitKeywords: [env.XIAOAI_EXIT_KEYWORD || "关闭AI"],
+    callAIKeywords,
+    wakeUpKeywords,
+    exitKeywords,
     onEnterAI: ["AI模式已开启"],
     onExitAI: ["AI模式已关闭"],
     onAIAsking: [],
