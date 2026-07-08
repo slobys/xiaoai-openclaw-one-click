@@ -58,7 +58,7 @@ show_menu() {
   echo " XiaoAI OpenClaw One-Click"
   echo "======================================"
   echo "1) 配置账号并部署免刷机服务"
-  echo "2) 修改小米账号/音箱/模型配置"
+  echo "2) 修改小米账号/音箱基础配置"
   echo "3) 重建免刷机服务"
   echo "4) 部署 OpenClaw API Bridge（在 OpenClaw 设备运行）"
   echo "5) 查看服务状态"

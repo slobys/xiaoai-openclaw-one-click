@@ -2,7 +2,9 @@
 set -eu
 
 APP_NAME="xiaoai-openclaw"
-WORK_DIR="${XIAOAI_OPENCLAW_WORK_DIR:-/opt/${APP_NAME}}"
+WORK_DIR="${XIAOAI_OPENCLAW_WORK_DIR:-/opt/open-xiaoai-migpt}"
+OLD_WORK_DIR="/opt/${APP_NAME}"
+ENV_FILE="$WORK_DIR/migpt.env"
 CONTAINER_NAME="${APP_NAME}"
 IMAGE="${MIGPT_IMAGE:-idootop/mi-gpt:latest}"
 BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
@@ -84,8 +86,8 @@ install_docker_if_needed() {
 
 env_value() {
   key="$1"
-  [ -f "$WORK_DIR/.env" ] || return 0
-  sed -n "s/^${key}=//p" "$WORK_DIR/.env" | tail -n 1
+  [ -f "$ENV_FILE" ] || return 0
+  sed -n "s/^${key}=//p" "$ENV_FILE" | tail -n 1
 }
 
 env_or_default() {
@@ -156,8 +158,8 @@ normalize_deepseek_base_url() {
 }
 
 normalize_env_file() {
-  [ -f "$WORK_DIR/.env" ] || return 0
-  tmp="$WORK_DIR/.env.tmp.$$"
+  [ -f "$ENV_FILE" ] || return 0
+  tmp="$ENV_FILE.tmp.$$"
   : > "$tmp"
 
   openclaw_base=$(env_value "OPENCLAW_BASE_URL")
@@ -203,34 +205,29 @@ normalize_env_file() {
   [ -n "$deepseek_model" ] || deepseek_model="deepseek-chat"
 
   {
-    printf '%s\n' '# ========================='
-    printf '%s\n' '# 1. 小米账号和音箱'
-    printf '%s\n' '# ========================='
-    printf '%s\n' '# MI_USER 必须填写小米 ID，不是手机号或邮箱。'
+    printf '%s\n' '# ===== 免刷机账号配置 ====='
+    printf '%s\n' '# MI_USER：小米 ID，不是手机号或邮箱。'
   } >> "$tmp"
   append_env_line "MI_USER" "" "$tmp"
+  printf '%s\n' '# MI_PASS：小米账号密码；使用 passToken Cookie 时可留空。' >> "$tmp"
   append_env_line "MI_PASS" "" "$tmp"
-  printf '%s\n' '# 从浏览器登录小米账号后提取的 passToken Cookie，可留空。' >> "$tmp"
-  printf '%s\n' '# 填写后脚本会生成 MiGPT 登录缓存，优先用 Cookie 登录，减少异地验证。' >> "$tmp"
+  printf '%s\n' '# MI_PASS_TOKEN：浏览器已登录小米账号后的 passToken Cookie，可填 passToken 值或整段 Cookie。' >> "$tmp"
   append_env_line "MI_PASS_TOKEN" "" "$tmp"
-  printf '%s\n' '# 米家中设置的音箱名称或设备 DID。' >> "$tmp"
+  printf '%s\n' '# MI_DID：米家中的音箱名称或设备 DID。' >> "$tmp"
   append_env_line "MI_DID" "" "$tmp"
-  printf '%s\n' '# 音箱型号代码，例如 LX06、L05B、OH2P。' >> "$tmp"
+  printf '%s\n' '# XIAOAI_HARDWARE：音箱型号代码，例如 LX06、L05B、OH2P。' >> "$tmp"
   append_env_line "XIAOAI_HARDWARE" "LX06" "$tmp"
   if [ -n "$(env_value "MI_DEVICE_ID")" ]; then
     append_env_line "MI_DEVICE_ID" "" "$tmp"
   fi
 
   {
-    printf '\n%s\n' '# ========================='
-    printf '%s\n' '# 2. 语音触发'
-    printf '%s\n' '# ========================='
-    printf '%s\n' '# 说“问AI……”触发单次回答；说“打开AI / 开启AI / 开启小爱”进入连续对话。'
+    printf '\n%s\n' '# ===== 语音触发 ====='
+    printf '%s\n' '# 问AI/问小爱：单次问答；开启AI/开启小爱：进入连续对话。'
   } >> "$tmp"
   append_env_line "XIAOAI_CALL_KEYWORD" "问AI" "$tmp"
-  append_env_line "XIAOAI_WAKE_KEYWORD" "打开AI" "$tmp"
+  append_env_line "XIAOAI_WAKE_KEYWORD" "开启AI" "$tmp"
   append_env_line "XIAOAI_EXIT_KEYWORD" "关闭AI" "$tmp"
-  printf '%s\n' '# 部分机型不支持连续对话，异常时改成 false。' >> "$tmp"
   append_env_line "XIAOAI_STREAM_RESPONSE" "true" "$tmp"
   append_env_line "XIAOAI_DEBUG" "false" "$tmp"
   if [ -n "$(env_value "XIAOAI_SYSTEM_PROMPT")" ]; then
@@ -238,20 +235,39 @@ normalize_env_file() {
   fi
 
   {
-    printf '\n%s\n' '# ========================='
-    printf '%s\n' '# 3. 默认模型和上下文'
-    printf '%s\n' '# ========================='
-    printf '%s\n' '# 可选：openclaw / openai / deepseek / gemini / ollama。'
+    printf '\n%s\n' '# ===== 默认模型和上下文 ====='
+    printf '%s\n' '# 可选：deepseek / openai / gemini / openclaw / ollama'
   } >> "$tmp"
-  append_env_line "XIAOAI_DEFAULT_PROVIDER" "openclaw" "$tmp"
+  append_env_line "XIAOAI_DEFAULT_PROVIDER" "deepseek" "$tmp"
   append_env_line "CONVERSATION_TURNS" "6" "$tmp"
   append_env_line "LLM_TIMEOUT_MS" "30000" "$tmp"
 
   {
-    printf '\n%s\n' '# ========================='
-    printf '%s\n' '# 4. OpenClaw API Bridge'
-    printf '%s\n' '# ========================='
-    printf '%s\n' '# 菜单 4 部署后，填 http://OpenClaw设备IP:11435/v1。'
+    printf '\n%s\n' '# ===== DeepSeek ====='
+    printf '%s\n' '# 说“切换deepseek”后使用。'
+  } >> "$tmp"
+  append_env_value "DEEPSEEK_BASE_URL" "$deepseek_base" "$tmp"
+  append_env_value "DEEPSEEK_API_KEY" "$deepseek_key" "$tmp"
+  append_env_value "DEEPSEEK_MODEL" "$deepseek_model" "$tmp"
+
+  {
+    printf '\n%s\n' '# ===== OpenAI ====='
+    printf '%s\n' '# 说“切换openai”后使用。兼容服务可把 BASE_URL 改成自己的 /v1 地址。'
+  } >> "$tmp"
+  append_env_value "OPENAI_BASE_URL" "$openai_base" "$tmp"
+  append_env_value "OPENAI_API_KEY" "$openai_key" "$tmp"
+  append_env_value "OPENAI_MODEL" "$openai_model" "$tmp"
+
+  {
+    printf '\n%s\n' '# ===== Gemini ====='
+    printf '%s\n' '# 说“切换gemini”或“切换谷歌”后使用。'
+  } >> "$tmp"
+  append_env_line "GEMINI_API_KEY" "" "$tmp"
+  append_env_line "GEMINI_MODEL" "gemini-2.0-flash" "$tmp"
+
+  {
+    printf '\n%s\n' '# ===== OpenClaw ====='
+    printf '%s\n' '# 说“切换open”后使用。菜单 4 部署 Bridge 后填 http://OpenClaw设备IP:11435/v1。'
   } >> "$tmp"
   append_env_value "OPENCLAW_BASE_URL" "$openclaw_base" "$tmp"
   append_env_value "OPENCLAW_API_KEY" "$openclaw_key" "$tmp"
@@ -263,35 +279,8 @@ normalize_env_file() {
   append_env_line "OPENCLAW_TEST_TIMEOUT_MS" "30000" "$tmp"
 
   {
-    printf '\n%s\n' '# ========================='
-    printf '%s\n' '# 5. OpenAI'
-    printf '%s\n' '# ========================='
-  } >> "$tmp"
-  append_env_value "OPENAI_BASE_URL" "$openai_base" "$tmp"
-  append_env_value "OPENAI_API_KEY" "$openai_key" "$tmp"
-  append_env_value "OPENAI_MODEL" "$openai_model" "$tmp"
-
-  {
-    printf '\n%s\n' '# ========================='
-    printf '%s\n' '# 6. DeepSeek'
-    printf '%s\n' '# ========================='
-  } >> "$tmp"
-  append_env_value "DEEPSEEK_BASE_URL" "$deepseek_base" "$tmp"
-  append_env_value "DEEPSEEK_API_KEY" "$deepseek_key" "$tmp"
-  append_env_value "DEEPSEEK_MODEL" "$deepseek_model" "$tmp"
-
-  {
-    printf '\n%s\n' '# ========================='
-    printf '%s\n' '# 7. Gemini'
-    printf '%s\n' '# ========================='
-  } >> "$tmp"
-  append_env_line "GEMINI_API_KEY" "" "$tmp"
-  append_env_line "GEMINI_MODEL" "gemini-2.0-flash" "$tmp"
-
-  {
-    printf '\n%s\n' '# ========================='
-    printf '%s\n' '# 8. Ollama'
-    printf '%s\n' '# ========================='
+    printf '\n%s\n' '# ===== Ollama ====='
+    printf '%s\n' '# 说“切换ollama”后使用。'
   } >> "$tmp"
   append_env_line "OLLAMA_BASE_URL" "" "$tmp"
   append_env_line "OLLAMA_API_KEY" "ollama" "$tmp"
@@ -307,9 +296,7 @@ normalize_env_file() {
         if ! is_known_env_key "$key"; then
           if [ "$extra_header_written" -eq 0 ]; then
             {
-              printf '\n%s\n' '# ========================='
-              printf '%s\n' '# 9. 其他自定义变量'
-              printf '%s\n' '# ========================='
+              printf '\n%s\n' '# ===== 其他自定义变量 ====='
             } >> "$tmp"
             extra_header_written=1
           fi
@@ -317,16 +304,16 @@ normalize_env_file() {
         fi
         ;;
     esac
-  done < "$WORK_DIR/.env"
+  done < "$ENV_FILE"
 
-  mv "$tmp" "$WORK_DIR/.env"
-  chmod 600 "$WORK_DIR/.env"
+  mv "$tmp" "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
 }
 
 set_env() {
   key="$1"
   value="$2"
-  tmp="$WORK_DIR/.env.tmp.$$"
+  tmp="$ENV_FILE.tmp.$$"
   found=0
   : > "$tmp"
   while IFS= read -r line || [ -n "$line" ]; do
@@ -339,10 +326,10 @@ set_env() {
         ;;
       *) printf '%s\n' "$line" >> "$tmp" ;;
     esac
-  done < "$WORK_DIR/.env"
+  done < "$ENV_FILE"
   [ "$found" -eq 1 ] || printf '%s=%s\n' "$key" "$value" >> "$tmp"
-  mv "$tmp" "$WORK_DIR/.env"
-  chmod 600 "$WORK_DIR/.env"
+  mv "$tmp" "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
 }
 
 ask() {
@@ -442,12 +429,20 @@ EOF
 
 prepare_files() {
   mkdir -p "$WORK_DIR"
-  if [ ! -f "$WORK_DIR/.env" ]; then
-    fetch_template "templates/env.example" "$WORK_DIR/.env"
-    chmod 600 "$WORK_DIR/.env"
+  if [ ! -f "$ENV_FILE" ]; then
+    if [ -f "$WORK_DIR/.env" ]; then
+      cp "$WORK_DIR/.env" "$ENV_FILE"
+    elif [ -f "$OLD_WORK_DIR/.env" ]; then
+      cp "$OLD_WORK_DIR/.env" "$ENV_FILE"
+      log "已从旧目录 $OLD_WORK_DIR/.env 迁移配置到 $ENV_FILE"
+    else
+      fetch_template "templates/env.example" "$ENV_FILE"
+    fi
+    chmod 600 "$ENV_FILE"
   fi
   normalize_env_file
   fetch_template "templates/migpt-account.js" "$WORK_DIR/.migpt.js"
+  ln -sf "$(basename "$ENV_FILE")" "$WORK_DIR/.env" 2>/dev/null || true
   [ -s "$WORK_DIR/.mi.json" ] || printf '{}\n' > "$WORK_DIR/.mi.json"
   chmod 600 "$WORK_DIR/.mi.json"
 }
@@ -461,8 +456,8 @@ configure() {
   ask "MI_DID" "米家中的音箱名称或 DID"
   ask "XIAOAI_HARDWARE" "音箱型号代码（例如 LX06、L05B、OH2P）"
   ask "XIAOAI_STREAM_RESPONSE" "是否开启连续对话（true/false）"
-  log "配置已保存到 $WORK_DIR/.env"
-  log "模型配置请直接编辑 $WORK_DIR/.env，然后运行菜单 3 重建服务。"
+  log "基础配置已保存到 $ENV_FILE"
+  log "模型配置也在 $ENV_FILE，按 DeepSeek/OpenAI/Gemini/OpenClaw/Ollama 分段编辑，然后运行菜单 3 重建服务。"
   log "已有服务时，请运行重建服务使新配置生效。"
 }
 
@@ -484,7 +479,7 @@ start_container() {
     --name "$CONTAINER_NAME" \
     --restart on-failure:5 \
     --network host \
-    --env-file "$WORK_DIR/.env" \
+    --env-file "$ENV_FILE" \
     -v "$WORK_DIR/.migpt.js:/app/.migpt.js:ro" \
     -v "$WORK_DIR/.mi.json:/app/.mi.json" \
     "$IMAGE" >/dev/null
@@ -502,7 +497,7 @@ case "$MODE" in
   --uninstall)
     need_root
     docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-    log "容器已删除，账号配置仍保留在 $WORK_DIR"
+    log "容器已删除，配置仍保留在 $WORK_DIR"
     ;;
   -h|--help)
     echo "用法: sh install.sh [--install|--configure|--restart|--status|--logs|--uninstall]"

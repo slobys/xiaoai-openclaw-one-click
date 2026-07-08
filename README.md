@@ -1,12 +1,22 @@
 # XiaoAI OpenClaw One-Click
 
-免刷机把小爱音箱接入 OpenClaw 或其他 OpenAI 兼容大模型。
+小爱音箱接入 DeepSeek / OpenAI / Gemini / OpenClaw / Ollama 的一键脚本。
 
-项目通过小米账号读取音箱对话记录并调用音箱 TTS，不需要刷固件、不需要音箱 SSH，也不限制音箱必须和服务器处于同一局域网。
+这是原刷机版 `open-xiaoai-migpt` 方案的免刷机版：保留原来的多模型配置、语音切换和软路由部署思路，把“音箱刷补丁 + SSH client”替换成“小米账号 + MiGPT 云端免刷机登录”。
 
-## 一键安装
+## 一键菜单
 
-NAS / 普通 Linux：
+OpenWrt / iStoreOS / root 用户优先用 Gitee：
+
+```sh
+opkg update
+opkg install ca-bundle wget-ssl
+wget -O /tmp/xiaoai-openclaw https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/bootstrap.sh
+chmod +x /tmp/xiaoai-openclaw
+XIAOAI_OPENCLAW_BASE_URL=https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main sh /tmp/xiaoai-openclaw
+```
+
+普通 Linux / NAS：
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/bootstrap.sh -o /tmp/xiaoai-openclaw && chmod +x /tmp/xiaoai-openclaw && sudo /tmp/xiaoai-openclaw
@@ -18,124 +28,66 @@ curl -fsSL https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/ma
 curl -fsSL https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/bootstrap.sh -o /tmp/xiaoai-openclaw && chmod +x /tmp/xiaoai-openclaw && sudo /tmp/xiaoai-openclaw
 ```
 
-OpenWrt：
-
-```sh
-opkg update
-opkg install ca-bundle wget-ssl
-wget -O /tmp/xiaoai-openclaw https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/bootstrap.sh
-chmod +x /tmp/xiaoai-openclaw
-XIAOAI_OPENCLAW_BASE_URL=https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main sh /tmp/xiaoai-openclaw
-```
-
 完整项目方式：
 
 ```sh
 git clone https://github.com/slobys/xiaoai-openclaw-one-click.git
 cd xiaoai-openclaw-one-click
-sudo sh bootstrap.sh
+sh bootstrap.sh
 ```
 
-菜单选择 `1`，按提示填写：
+## 菜单怎么用
 
-- 小米 ID：不是手机号或邮箱，可在小米账号个人信息中查看
-- 小米账号密码，或已登录浏览器里的 `passToken` Cookie
+第一次运行选：
+
+```text
+1) 配置账号并部署免刷机服务
+```
+
+它只负责基础信息：
+
+- 小米 ID，不是手机号或邮箱
+- 小米账号密码，或浏览器已登录小米账号后的 `passToken`
 - 米家中的音箱名称或 DID
 - 音箱型号代码，例如 `LX06`、`L05B`、`OH2P`
 - 是否开启连续对话
 
-账号配置保存在 `/opt/xiaoai-openclaw/.env`，小米登录缓存保存在 `/opt/xiaoai-openclaw/.mi.json`，文件权限默认为仅 root 可读。
-
-## 使用
-
-默认语音命令：
+后续修改基础信息选：
 
 ```text
-问AI今天天气怎么样
-问小爱你是谁
-打开AI
-开启AI
-开启小爱
-关闭AI
+2) 修改小米账号/音箱基础配置
 ```
 
-`问AI`、`问小爱` 用于单次提问。部分小爱会把“问AI”识别成“揾AI”或“文AI”，脚本已内置这些误识别别名。`打开AI`、`开启AI`、`开启小爱` 用于进入连续对话。
+这个菜单不会再问 DeepSeek、OpenAI、Gemini、OpenClaw、Ollama 的 Key。模型配置直接编辑：
 
-如果连续对话没有接管，先用单次问答测试：
+```sh
+vi /opt/open-xiaoai-migpt/migpt.env
+```
+
+改完后选：
 
 ```text
-问AI你是谁
+3) 重建免刷机服务
 ```
 
-部分音箱连续对话异常时，可在配置中设置：
+## 文件位置
 
-```env
-XIAOAI_STREAM_RESPONSE=false
-```
+- 工作目录：`/opt/open-xiaoai-migpt`
+- 模型和账号配置：`/opt/open-xiaoai-migpt/migpt.env`
+- 免刷机 MiGPT 配置：`/opt/open-xiaoai-migpt/.migpt.js`
+- 小米登录缓存：`/opt/open-xiaoai-migpt/.mi.json`
+- OpenClaw bridge：`/opt/openclaw-llm-bridge`
 
-修改后运行菜单 `3` 重建服务。
+历史新版目录 `/opt/xiaoai-openclaw/.env` 会在首次运行时自动迁移到 `/opt/open-xiaoai-migpt/migpt.env`。
 
-## 小米账号安全验证
+## 模型配置
 
-首次在 OpenWrt、NAS 或新公网 IP 登录时，小米可能会提示异地登录安全验证。日志里通常会出现 `micoapi` 和 `xiaomiio` 两个验证链接。
+`migpt.env` 按旧版思路分开配置。
 
-如果不想在 OpenWrt 上直接用密码触发异地登录，可以在电脑浏览器登录小米账号后，从浏览器开发者工具的 Cookie 中复制 `passToken` 值。重新运行菜单选 `2`，小米账号密码可留空，把 `passToken` 填到“小米 passToken Cookie”。脚本会生成 MiGPT 的登录缓存并挂载到容器里。
-
-处理步骤：
-
-```sh
-docker stop xiaoai-openclaw
-```
-
-在浏览器打开日志里的验证链接并完成授权。两个服务都提示时，两个链接都要完成。授权后通常需要等待一段时间才会生效；生效后重新运行菜单选 `3` 重建免刷机服务。
-
-不要在验证未完成时反复重建服务，否则可能持续触发小米风控。
-
-## 接入 OpenClaw
-
-在安装了 OpenClaw 的设备运行菜单 `4` 部署 API bridge，然后把免刷机服务配置为：
-
-```env
-XIAOAI_DEFAULT_PROVIDER=openclaw
-OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
-OPENCLAW_API_KEY=xiaoai-local
-OPENCLAW_DISPLAY_MODEL=open
-```
-
-修改后运行菜单 `3` 重建服务。
-
-## 多模型切换
-
-免刷机版已移植旧刷机版的多模型入口。配置文件是 `/opt/xiaoai-openclaw/.env`，改完后运行菜单 `3` 重建服务。
-
-菜单 `1` / `2` 只配置小米账号、passToken、音箱名称、型号和连续对话开关。模型不要在交互菜单里填，直接编辑 `.env` 更直观。
-
-```sh
-vi /opt/xiaoai-openclaw/.env
-```
-
-`.env` 里模型配置按来源分开填写，不要把 DeepSeek 填到 OpenClaw 段，也不要把 OpenClaw bridge 填到 OpenAI 段。
-
-默认使用哪个模型：
+默认模型：
 
 ```env
 XIAOAI_DEFAULT_PROVIDER=deepseek
-```
-
-OpenClaw：
-
-```env
-OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
-OPENCLAW_API_KEY=xiaoai-local
-OPENCLAW_DISPLAY_MODEL=open
-```
-
-OpenAI：
-
-```env
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
 ```
 
 DeepSeek：
@@ -146,11 +98,27 @@ DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_MODEL=deepseek-chat
 ```
 
+OpenAI：
+
+```env
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
+
 Gemini：
 
 ```env
 GEMINI_API_KEY=...
 GEMINI_MODEL=gemini-2.0-flash
+```
+
+OpenClaw：
+
+```env
+OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
+OPENCLAW_API_KEY=xiaoai-local
+OPENCLAW_DISPLAY_MODEL=open
 ```
 
 Ollama：
@@ -161,63 +129,77 @@ OLLAMA_API_KEY=ollama
 OLLAMA_MODEL=qwen3:4b
 ```
 
-如果你的旧 `.env` 里字段混在一起，重新拉最新脚本后运行菜单 `2` 或 `3`，脚本会在保留现有值的前提下把 `.env` 整理成分区格式。
+## OpenClaw Bridge
 
-语音口令：
+在安装了 OpenClaw 的设备运行菜单：
 
 ```text
-切换open
-切换ollama
+4) 部署 OpenClaw API Bridge（在 OpenClaw 设备运行）
+```
+
+然后在软路由/NAS 的 `/opt/open-xiaoai-migpt/migpt.env` 填：
+
+```env
+OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
+OPENCLAW_API_KEY=xiaoai-local
+OPENCLAW_DISPLAY_MODEL=open
+```
+
+健康检查：
+
+```sh
+curl http://OpenClaw设备IP:11435/health
+```
+
+## 语音命令
+
+先唤醒小爱同学，再说：
+
+```text
+开启小爱
+开启AI
 切换deepseek
 切换openai
-切换gemini
+切换谷歌
+切换open
+切换ollama
 当前模型
 测试模型
 清空上下文
+关闭AI
 ```
 
-## 兼容性
-
-已内置常见型号指令：
+也支持单次问答：
 
 ```text
-OH2P LX06 S12 L15A LX5A LX05 X10A L17A L06A LX01
-L05B L05C L09A LX04 ASX4B X6A X08E
+问AI你是谁
+问小爱你是谁
 ```
 
-兼容性取决于小米云端是否返回该音箱的对话记录，以及机型是否支持对应 TTS 指令。个别型号可能只能单次问答，少数型号完全不支持。
+部分小爱会把“问AI”识别成“揾AI”或“文AI”，脚本已内置这些别名。
+
+## 小米账号安全验证
+
+首次在 OpenWrt、NAS 或新公网 IP 登录，小米可能触发异地登录验证。日志里通常会出现 `micoapi` 和 `xiaomiio` 两个验证链接。
+
+如果不想在 OpenWrt 上直接用密码触发验证，可以在电脑浏览器登录小米账号后，从浏览器 Cookie 里复制 `passToken`。重新运行菜单选 `2`，密码可以留空，把 `passToken` 填进去。
+
+遇到验证时先停容器：
+
+```sh
+docker stop xiaoai-openclaw
+```
+
+完成网页授权后等待一段时间，再运行菜单 `3` 重建。验证没完成前不要反复重建，否则可能持续触发风控。
 
 ## 能力边界
 
-- 免刷机模式依赖小米云端接口，响应速度和打断效果不如刷机方案。
-- 普通小爱命令会先由原生小爱处理，项目只能在云端记录出现后接管回答。
-- 当前只支持小爱音箱。天猫精灵、小度、Alexa 等品牌没有通用账号接口，需要分别开发官方 Skill 或品牌适配器。
-- 小米账号密码会保存在本机，请只部署在可信设备上。
-- 上游 MiGPT 已于 2026 年 4 月归档，后续需要逐步把账号适配能力迁移到本项目维护。
+- 免刷机版依赖小米云端接口，不需要音箱刷机，也不需要 SSH 到音箱。
+- 免刷机版的响应速度、打断效果通常不如刷机版。
+- 普通小爱命令会先由原生小爱处理，项目在云端记录出现后接管回答。
+- 账号、Key 和登录缓存只保存在本机，请部署在可信设备上。
 
-## 文件位置
+## 版本
 
-- 账号和模型配置：`/opt/xiaoai-openclaw/.env`
-- MiGPT 配置：`/opt/xiaoai-openclaw/.migpt.js`
-- OpenClaw bridge：`/opt/openclaw-llm-bridge`
-
-本项目使用 [MiGPT](https://github.com/idootop/mi-gpt) 提供的免刷机小米云端能力。
-
-## 版本切换
-
-- `v2.0.0-account`：当前免刷机账号版
-- `v1.0.0-flash`：原 Open-XiaoAI 刷机版
-
-切换到免刷机版：
-
-```sh
-git switch main
-```
-
-切换到原刷机版：
-
-```sh
-git switch legacy-flash
-```
-
-标签用于固定历史版本，分支用于继续维护对应版本。
+- `main`：免刷机版，继承旧刷机版的多模型配置和语音命令。
+- `legacy-flash` / `v1.0.0-flash`：原 Open-XiaoAI 刷机版。

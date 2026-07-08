@@ -226,9 +226,9 @@ EOF
   echo "运行用户: ${service_user}"
   echo "OpenClaw 命令: ${openclaw_bin}"
   echo "OpenClaw 模式: ${BRIDGE_MODE}, 会话: ${SESSION_KEY}"
-  echo "MiGPT 服务器 .env 里设置：OPENCLAW_BASE_URL=http://${ip_addr}:${PORT}/v1"
+  echo "MiGPT 服务器 /opt/open-xiaoai-migpt/migpt.env 里设置：OPENCLAW_BASE_URL=http://${ip_addr}:${PORT}/v1"
   if [ -n "$TOKEN" ]; then
-    echo "MiGPT 服务器 .env 里设置：OPENCLAW_API_KEY=${TOKEN}"
+    echo "MiGPT 服务器 /opt/open-xiaoai-migpt/migpt.env 里设置：OPENCLAW_API_KEY=${TOKEN}"
   else
     echo "未设置 OPENCLAW_BRIDGE_TOKEN，局域网内可直接调用；仅建议内网使用。"
   fi
