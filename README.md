@@ -39,12 +39,12 @@ sudo sh bootstrap.sh
 菜单选择 `1`，按提示填写：
 
 - 小米 ID：不是手机号或邮箱，可在小米账号个人信息中查看
-- 小米账号密码
+- 小米账号密码，或已登录浏览器里的 `passToken` Cookie
 - 米家中的音箱名称或 DID
 - 音箱型号代码，例如 `LX06`、`L05B`、`OH2P`
 - OpenClaw bridge 或其他 OpenAI 兼容模型接口
 
-账号配置保存在 `/opt/xiaoai-openclaw/.env`，文件权限默认为仅 root 可读。
+账号配置保存在 `/opt/xiaoai-openclaw/.env`，小米登录缓存保存在 `/opt/xiaoai-openclaw/.mi.json`，文件权限默认为仅 root 可读。
 
 ## 使用
 
@@ -67,6 +67,8 @@ XIAOAI_STREAM_RESPONSE=true
 ## 小米账号安全验证
 
 首次在 OpenWrt、NAS 或新公网 IP 登录时，小米可能会提示异地登录安全验证。日志里通常会出现 `micoapi` 和 `xiaomiio` 两个验证链接。
+
+如果不想在 OpenWrt 上直接用密码触发异地登录，可以在电脑浏览器登录小米账号后，从浏览器开发者工具的 Cookie 中复制 `passToken` 值。重新运行菜单选 `2`，小米账号密码可留空，把 `passToken` 填到“小米 passToken Cookie”。脚本会生成 MiGPT 的登录缓存并挂载到容器里。
 
 处理步骤：
 

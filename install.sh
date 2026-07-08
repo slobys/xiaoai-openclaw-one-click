@@ -145,6 +145,66 @@ ask_secret() {
   set_env "$key" "$value"
 }
 
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+cookie_value() {
+  name="$1"
+  raw="$2"
+  printf '%s' "$raw" | tr ';' '\n' | sed 's/^[[:space:]]*//' | sed -n "s/^${name}=//p" | tail -n 1
+}
+
+prepare_mi_cache() {
+  pass_token=$(env_value "MI_PASS_TOKEN")
+  [ -n "$pass_token" ] || return 0
+
+  case "$pass_token" in
+    *passToken=*) pass_token=$(cookie_value "passToken" "$pass_token") ;;
+  esac
+  [ -n "$pass_token" ] || die "MI_PASS_TOKEN 未解析到 passToken"
+
+  user_id=$(env_value "MI_USER")
+  did=$(env_value "MI_DID")
+  password=$(env_value "MI_PASS")
+  [ -n "$password" ] || password="__cookie_login__"
+  device_id=$(env_value "MI_DEVICE_ID")
+  [ -n "$device_id" ] || device_id="android_$(date +%s)$$"
+
+  user_id_json=$(json_escape "$user_id")
+  did_json=$(json_escape "$did")
+  password_json=$(json_escape "$password")
+  device_id_json=$(json_escape "$device_id")
+  pass_token_json=$(json_escape "$pass_token")
+
+  umask 077
+  cat > "$WORK_DIR/.mi.json" <<EOF
+{
+  "mina": {
+    "sid": "micoapi",
+    "deviceId": "$device_id_json",
+    "userId": "$user_id_json",
+    "password": "$password_json",
+    "did": "$did_json",
+    "pass": {
+      "passToken": "$pass_token_json"
+    }
+  },
+  "miiot": {
+    "sid": "xiaomiio",
+    "deviceId": "$device_id_json",
+    "userId": "$user_id_json",
+    "password": "$password_json",
+    "did": "$did_json",
+    "pass": {
+      "passToken": "$pass_token_json"
+    }
+  }
+}
+EOF
+  chmod 600 "$WORK_DIR/.mi.json"
+}
+
 prepare_files() {
   mkdir -p "$WORK_DIR"
   if [ ! -f "$WORK_DIR/.env" ]; then
@@ -152,13 +212,16 @@ prepare_files() {
     chmod 600 "$WORK_DIR/.env"
   fi
   fetch_template "templates/migpt-account.js" "$WORK_DIR/.migpt.js"
+  [ -s "$WORK_DIR/.mi.json" ] || printf '{}\n' > "$WORK_DIR/.mi.json"
+  chmod 600 "$WORK_DIR/.mi.json"
 }
 
 configure() {
   prepare_files
   log "填写小米账号和音箱信息。小米 ID 不是手机号或邮箱。"
   ask "MI_USER" "小米 ID"
-  ask_secret "MI_PASS" "小米账号密码"
+  ask_secret "MI_PASS" "小米账号密码（使用 passToken Cookie 时可留空）"
+  ask_secret "MI_PASS_TOKEN" "小米 passToken Cookie（可选，建议从已登录浏览器复制）"
   ask "MI_DID" "米家中的音箱名称或 DID"
   ask "XIAOAI_HARDWARE" "音箱型号代码（例如 LX06、L05B、OH2P）"
   ask "OPENAI_BASE_URL" "模型接口地址（OpenClaw bridge 可填 http://设备IP:11435/v1）"
@@ -169,15 +232,17 @@ configure() {
 }
 
 validate_config() {
-  for key in MI_USER MI_PASS MI_DID; do
+  for key in MI_USER MI_DID; do
     [ -n "$(env_value "$key")" ] || die "$key 未配置，请先运行配置账号"
   done
+  [ -n "$(env_value "MI_PASS")" ] || [ -n "$(env_value "MI_PASS_TOKEN")" ] || die "MI_PASS 和 MI_PASS_TOKEN 至少配置一个"
 }
 
 start_container() {
   need_root
   prepare_files
   validate_config
+  prepare_mi_cache
   install_docker_if_needed
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
   docker run -d \
@@ -186,6 +251,7 @@ start_container() {
     --network host \
     --env-file "$WORK_DIR/.env" \
     -v "$WORK_DIR/.migpt.js:/app/.migpt.js:ro" \
+    -v "$WORK_DIR/.mi.json:/app/.mi.json" \
     "$IMAGE" >/dev/null
   log "免刷机小爱服务已启动。首次登录可能需要稍等片刻。"
   log "如果日志提示小米账号安全验证，请先完成网页授权，等待生效后再运行重建服务。"

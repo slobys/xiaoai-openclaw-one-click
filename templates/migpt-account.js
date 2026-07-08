@@ -31,7 +31,7 @@ export default {
   master: { name: "用户", profile: "" },
   speaker: {
     userId: env.MI_USER,
-    password: env.MI_PASS,
+    password: env.MI_PASS || "__cookie_login__",
     did: env.MI_DID,
     callAIKeywords: [env.XIAOAI_CALL_KEYWORD || "问AI"],
     wakeUpKeywords: [env.XIAOAI_WAKE_KEYWORD || "打开AI"],
