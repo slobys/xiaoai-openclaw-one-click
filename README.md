@@ -42,7 +42,7 @@ sudo sh bootstrap.sh
 - 小米账号密码，或已登录浏览器里的 `passToken` Cookie
 - 米家中的音箱名称或 DID
 - 音箱型号代码，例如 `LX06`、`L05B`、`OH2P`
-- OpenClaw bridge 或其他 OpenAI 兼容模型接口
+- 是否开启连续对话
 
 账号配置保存在 `/opt/xiaoai-openclaw/.env`，小米登录缓存保存在 `/opt/xiaoai-openclaw/.mi.json`，文件权限默认为仅 root 可读。
 
@@ -114,35 +114,36 @@ OPENCLAW_DISPLAY_MODEL=open
 vi /opt/xiaoai-openclaw/.env
 ```
 
+`.env` 里模型配置按来源分开填写，不要把 DeepSeek 填到 OpenClaw 段，也不要把 OpenClaw bridge 填到 OpenAI 段。
+
+默认使用哪个模型：
+
+```env
+XIAOAI_DEFAULT_PROVIDER=deepseek
+```
+
 OpenClaw：
 
 ```env
-XIAOAI_DEFAULT_PROVIDER=openclaw
 OPENCLAW_BASE_URL=http://OpenClaw设备IP:11435/v1
 OPENCLAW_API_KEY=xiaoai-local
 OPENCLAW_DISPLAY_MODEL=open
 ```
 
-Ollama：
-
-```env
-OLLAMA_BASE_URL=http://电脑IP:11434/v1
-OLLAMA_MODEL=qwen3:4b
-```
-
-DeepSeek：
-
-```env
-DEEPSEEK_API_KEY=sk-...
-DEEPSEEK_MODEL=deepseek-chat
-```
-
-OpenAI 或其他 OpenAI-compatible：
+OpenAI：
 
 ```env
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
+```
+
+DeepSeek：
+
+```env
+DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_MODEL=deepseek-chat
 ```
 
 Gemini：
@@ -151,6 +152,16 @@ Gemini：
 GEMINI_API_KEY=...
 GEMINI_MODEL=gemini-2.0-flash
 ```
+
+Ollama：
+
+```env
+OLLAMA_BASE_URL=http://电脑IP:11434/v1
+OLLAMA_API_KEY=ollama
+OLLAMA_MODEL=qwen3:4b
+```
+
+如果你的旧 `.env` 里字段混在一起，重新拉最新脚本后运行菜单 `2` 或 `3`，脚本会在保留现有值的前提下把 `.env` 整理成分区格式。
 
 语音口令：
 
