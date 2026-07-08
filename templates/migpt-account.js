@@ -32,7 +32,7 @@ function keywords(value, defaults) {
   return [...new Set(items)];
 }
 
-const callAIKeywords = keywords(env.XIAOAI_CALL_KEYWORD, ["问AI", "问小爱"]);
+const callAIKeywords = keywords(env.XIAOAI_CALL_KEYWORD, ["问AI", "问 ai", "问小爱", "揾AI", "揾 ai", "文AI", "文 ai"]);
 const wakeUpKeywords = keywords(env.XIAOAI_WAKE_KEYWORD, ["打开AI", "开启AI", "开启小爱"]);
 const exitKeywords = keywords(env.XIAOAI_EXIT_KEYWORD, ["关闭AI", "退出AI", "关闭小爱"]);
 

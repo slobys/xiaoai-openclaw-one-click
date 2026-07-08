@@ -227,6 +227,7 @@ configure() {
   ask "OPENAI_BASE_URL" "模型接口地址（OpenClaw bridge 可填 http://设备IP:11435/v1）"
   ask_secret "OPENAI_API_KEY" "模型接口 API Key"
   ask "OPENAI_MODEL" "模型名称（OpenClaw 默认填 open）"
+  ask "XIAOAI_STREAM_RESPONSE" "是否开启连续对话（true/false）"
   log "配置已保存到 $WORK_DIR/.env"
   log "已有服务时，请运行重建服务使新配置生效。"
 }
