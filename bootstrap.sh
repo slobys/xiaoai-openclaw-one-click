@@ -5,6 +5,8 @@ PROJECT_NAME="xiaoai-openclaw"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 INSTALL_SH="$SCRIPT_DIR/install.sh"
 BRIDGE_SH=""
+BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
+CN_BASE_URL="${XIAOAI_OPENCLAW_CN_BASE_URL:-https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main}"
 
 fetch() {
   url="$1"
@@ -23,12 +25,19 @@ cache_bust_url() {
   esac
 }
 
+fetch_from_mirrors() {
+  path="$1"
+  out="$2"
+  if ! fetch "$(cache_bust_url "$BASE_URL/$path")" "$out"; then
+    fetch "$(cache_bust_url "$CN_BASE_URL/$path")" "$out"
+  fi
+}
+
 if [ ! -f "$INSTALL_SH" ]; then
   TMP_DIR="/tmp/${PROJECT_NAME}-one-click"
   rm -rf "$TMP_DIR"
   mkdir -p "$TMP_DIR"
-  BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
-  fetch "$(cache_bust_url "$BASE_URL/install.sh")" "$TMP_DIR/install.sh"
+  fetch_from_mirrors "install.sh" "$TMP_DIR/install.sh"
   chmod +x "$TMP_DIR/install.sh"
   INSTALL_SH="$TMP_DIR/install.sh"
 fi
@@ -38,8 +47,7 @@ ensure_bridge_sh() {
   if [ ! -f "$BRIDGE_SH" ]; then
     TMP_DIR="/tmp/${PROJECT_NAME}-one-click"
     mkdir -p "$TMP_DIR"
-    BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
-    fetch "$(cache_bust_url "$BASE_URL/install-openclaw-bridge.sh")" "$TMP_DIR/install-openclaw-bridge.sh"
+    fetch_from_mirrors "install-openclaw-bridge.sh" "$TMP_DIR/install-openclaw-bridge.sh"
     BRIDGE_SH="$TMP_DIR/install-openclaw-bridge.sh"
   fi
 }

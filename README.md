@@ -18,6 +18,16 @@ curl -fsSL https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/ma
 curl -fsSL https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/bootstrap.sh -o /tmp/xiaoai-openclaw && chmod +x /tmp/xiaoai-openclaw && sudo /tmp/xiaoai-openclaw
 ```
 
+OpenWrt：
+
+```sh
+opkg update
+opkg install ca-bundle wget-ssl
+wget -O /tmp/xiaoai-openclaw https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/bootstrap.sh
+chmod +x /tmp/xiaoai-openclaw
+XIAOAI_OPENCLAW_BASE_URL=https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main sh /tmp/xiaoai-openclaw
+```
+
 完整项目方式：
 
 ```sh

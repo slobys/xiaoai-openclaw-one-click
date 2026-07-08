@@ -17,7 +17,7 @@ need_root() {
   if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     return 0
   fi
-  die "当前用户无 Docker 权限，请使用 sudo sh install.sh"
+  die "当前用户无 Docker 权限，请使用 root 或 sudo sh install.sh"
 }
 
 fetch() {
@@ -41,19 +41,45 @@ fetch_template() {
   fi
 }
 
+start_docker_service() {
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl enable --now docker 2>/dev/null || true
+  fi
+  if [ -x /etc/init.d/dockerd ]; then
+    /etc/init.d/dockerd enable 2>/dev/null || true
+    /etc/init.d/dockerd restart 2>/dev/null || /etc/init.d/dockerd start 2>/dev/null || true
+  fi
+  if [ -x /etc/init.d/docker ]; then
+    /etc/init.d/docker enable 2>/dev/null || true
+    /etc/init.d/docker restart 2>/dev/null || /etc/init.d/docker start 2>/dev/null || true
+  fi
+  service docker start 2>/dev/null || true
+}
+
 install_docker_if_needed() {
-  command -v docker >/dev/null 2>&1 && return 0
+  if command -v docker >/dev/null 2>&1; then
+    docker info >/dev/null 2>&1 && return 0
+    start_docker_service
+    docker info >/dev/null 2>&1 && return 0
+  fi
+
   log "正在安装 Docker..."
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update
     apt-get install -y ca-certificates curl
+    curl -fsSL https://get.docker.com | sh
   elif command -v yum >/dev/null 2>&1; then
     yum install -y curl
+    curl -fsSL https://get.docker.com | sh
+  elif command -v opkg >/dev/null 2>&1; then
+    opkg update
+    opkg install ca-bundle wget-ssl dockerd docker
   else
     die "未识别的系统，请先手动安装 Docker"
   fi
-  curl -fsSL https://get.docker.com | sh
-  systemctl enable --now docker 2>/dev/null || service docker start 2>/dev/null || true
+
+  start_docker_service
+  docker info >/dev/null 2>&1 || die "Docker 未正常运行，请检查 dockerd 服务和 OpenWrt 存储空间"
 }
 
 env_value() {
