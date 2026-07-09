@@ -173,8 +173,10 @@ OLLAMA_BASE_URL=http://192.168.2.193:11434/v1 OLLAMA_MODEL=qwen3:4b xiaoai-openc
 ## 语音命令
 
 ```text
+问AI你是谁
 开启AI
 开启小爱
+关闭AI
 切换open
 切换ollama
 切换deepseek
@@ -185,6 +187,8 @@ OLLAMA_BASE_URL=http://192.168.2.193:11434/v1 OLLAMA_MODEL=qwen3:4b xiaoai-openc
 停止
 闭嘴
 ```
+
+免刷机版会保留原生小爱的普通问答能力。想让 AI 回答单次问题时说 `问AI...`；想连续追问时先说 `开启AI`，不用 AI 时说 `关闭AI`。
 
 Ollama 也兼容这些口令：`切换欧拉拉`、`切换奥拉马`、`切换gemma`、`切换电脑`、`切换本地电脑`。
 

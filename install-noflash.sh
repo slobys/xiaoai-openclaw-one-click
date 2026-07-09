@@ -375,7 +375,8 @@ normalize_env_file() {
 
   {
     printf '\n%s\n' '# ===== 语音触发 ====='
-    printf '%s\n' '# 问AI/问小爱：单次问答；开启AI/开启小爱：进入连续对话。'
+    printf '%s\n' '# 问AI/问小爱：单次 AI 问答；普通问句保留给原生小爱，避免双答。'
+    printf '%s\n' '# 开启AI/开启小爱：进入连续 AI 对话。'
   } >> "$tmp"
   append_env_line "XIAOAI_CALL_KEYWORD" "问AI" "$tmp"
   append_env_line "XIAOAI_WAKE_KEYWORD" "开启AI" "$tmp"
@@ -501,15 +502,22 @@ patch_config_for_custom_qa_command() {
   if grep -q "fallbackQACommand" "$CONFIG_FILE"; then
     return 0
   fi
+  grep -q "const callAIKeywords" "$CONFIG_FILE" || return 0
+  grep -q "function stripCallKeyword" "$CONFIG_FILE" || return 0
   tmp="$CONFIG_FILE.tmp.$$"
   awk '
     {
       if ($0 ~ /^export default \{/) {
+        print "function hasCallAIKeyword(text) {"
+        print "  const cmd = normalizeCommand(text);"
+        print "  return callAIKeywords.some((keyword) => cmd.startsWith(normalizeCommand(keyword)));"
+        print "}"
+        print ""
         print "const fallbackQACommand = {"
         print "  match: (msg) => {"
         print "    const text = String(msg?.text || \"\").trim();"
         print "    if (!text) return false;"
-        print "    return !commandAction(text);"
+        print "    return hasCallAIKeyword(text) && !commandAction(text);"
         print "  },"
         print "  run: async (msg) => {"
         print "    const userText = stripCallKeyword(msg.text);"
@@ -534,6 +542,36 @@ patch_config_for_custom_qa_command() {
   mv "$tmp" "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE"
   log "已给 $CONFIG_FILE 补充连续对话自定义问答逻辑"
+}
+
+patch_config_for_strict_ai_trigger() {
+  [ -f "$CONFIG_FILE" ] || return 0
+  if grep -q "hasCallAIKeyword" "$CONFIG_FILE" && ! grep -q "return !commandAction(text);" "$CONFIG_FILE"; then
+    return 0
+  fi
+  grep -q "function stripCallKeyword" "$CONFIG_FILE" || return 0
+  tmp="$CONFIG_FILE.tmp.$$"
+  awk '
+    BEGIN { inserted_helper = 0 }
+    {
+      if (!inserted_helper && $0 ~ /^function stripCallKeyword\(text\)/) {
+        print "function hasCallAIKeyword(text) {"
+        print "  const cmd = normalizeCommand(text);"
+        print "  return callAIKeywords.some((keyword) => cmd.startsWith(normalizeCommand(keyword)));"
+        print "}"
+        print ""
+        inserted_helper = 1
+      }
+      if ($0 ~ /return !commandAction\(text\);/) {
+        print "    return hasCallAIKeyword(text) && !commandAction(text);"
+        next
+      }
+      print
+    }
+  ' "$CONFIG_FILE" > "$tmp"
+  mv "$tmp" "$CONFIG_FILE"
+  chmod 600 "$CONFIG_FILE"
+  log "已收紧 $CONFIG_FILE 的免刷机 AI 触发条件，避免原生小爱和 AI 抢答"
 }
 
 set_env() {
@@ -676,6 +714,7 @@ prepare_files() {
   fi
   patch_config_for_migpt_openai_env
   patch_config_for_custom_qa_command
+  patch_config_for_strict_ai_trigger
   ln -sf "$(basename "$CONFIG_FILE")" "$WORK_DIR/.migpt.js" 2>/dev/null || true
   ln -sf "$(basename "$ENV_FILE")" "$LEGACY_ENV_FILE" 2>/dev/null || true
   [ -s "$WORK_DIR/.mi.json" ] || printf '{}\n' > "$WORK_DIR/.mi.json"

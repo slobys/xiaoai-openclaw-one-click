@@ -260,9 +260,14 @@ function currentProvider() {
   return llmState.provider;
 }
 
+function hasCallAIKeyword(text) {
+  const cmd = normalizeCommand(text);
+  return callAIKeywords.some((keyword) => cmd.startsWith(normalizeCommand(keyword)));
+}
+
 function stripCallKeyword(text) {
   const raw = String(text || "").trim();
-  const hit = callAIKeywords.find((keyword) => raw.startsWith(keyword));
+  const hit = callAIKeywords.find((keyword) => raw.toLowerCase().startsWith(String(keyword).toLowerCase()));
   return hit ? raw.slice(hit.length).trim() : raw;
 }
 
@@ -431,7 +436,7 @@ const fallbackQACommand = {
   match: (msg) => {
     const text = String(msg?.text || "").trim();
     if (!text) return false;
-    return !commandAction(text);
+    return hasCallAIKeyword(text) && !commandAction(text);
   },
   run: async (msg) => {
     const userText = stripCallKeyword(msg.text);

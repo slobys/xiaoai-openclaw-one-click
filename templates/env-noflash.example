@@ -11,7 +11,8 @@ MI_DID=
 XIAOAI_HARDWARE=LX06
 
 # ===== 语音触发 =====
-# 问AI/问小爱：单次问答；开启AI/开启小爱：进入连续对话。
+# 问AI/问小爱：单次 AI 问答；普通问句保留给原生小爱，避免双答。
+# 开启AI/开启小爱：进入连续 AI 对话。
 XIAOAI_CALL_KEYWORD=问AI
 XIAOAI_WAKE_KEYWORD=开启AI
 XIAOAI_EXIT_KEYWORD=关闭AI
