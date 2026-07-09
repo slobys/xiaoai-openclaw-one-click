@@ -60,6 +60,8 @@ const heartbeatMs = envInt("XIAOAI_HEARTBEAT_MS", 500);
 const keepAliveIntervalMs = envInt("XIAOAI_KEEPALIVE_INTERVAL_MS", 500);
 const exitKeepAliveAfter = envInt("XIAOAI_EXIT_KEEPALIVE_AFTER", 300);
 const checkTTSStatusAfter = envInt("XIAOAI_CHECK_TTS_STATUS_AFTER", 1);
+const defaultAudioSilentUrl = "https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/assets/silent.mp3";
+const audioSilent = env.XIAOAI_AUDIO_SILENT || env.AUDIO_SILENT || (env.XIAOAI_DISABLE_DEFAULT_SILENT === "true" ? undefined : defaultAudioSilentUrl);
 function compact(text) {
   return String(text || "").replace(/\s+/g, " ").trim();
 }
@@ -80,6 +82,8 @@ function modeKeywords(items, mode) {
   };
   return arr;
 }
+const enterAIPrompts = list(env.XIAOAI_ENTER_AI_PROMPT, []);
+const exitAIPrompts = list(env.XIAOAI_EXIT_AI_PROMPT, []);
 const providers = {
   deepseek: { label: "deepseek", baseURL: env.DEEPSEEK_BASE_URL || "https://api.deepseek.com", apiKey: env.DEEPSEEK_API_KEY || "", model: env.DEEPSEEK_MODEL || "deepseek-v4-flash", kind: "openai" },
   openai: { label: "openai", baseURL: env.OPENAI_BASE_URL || "https://api.openai.com/v1", apiKey: env.OPENAI_API_KEY || "", model: env.OPENAI_MODEL || "gpt-4o-mini", kind: "openai" },
@@ -189,8 +193,8 @@ const speakerConfig = {
   callAIKeywords: list(env.XIAOAI_CALL_KEYWORD, ["问AI", "问 ai", "问小爱", "揾AI", "文AI"]),
   wakeUpKeywords: modeKeywords(list(env.XIAOAI_WAKE_KEYWORD, ["打开AI", "开启AI"]), "ai"),
   exitKeywords: modeKeywords(list(env.XIAOAI_EXIT_KEYWORD, ["关闭AI", "退出AI", "关闭小爱", "开启小爱", "切换小爱", "原生模式", "原生小爱"]), "native"),
-  onEnterAI: ["AI模式已开启"],
-  onExitAI: ["AI模式已关闭"],
+  onEnterAI: enterAIPrompts,
+  onExitAI: exitAIPrompts,
   onAIError: ["连接模型失败，请稍后再试"],
   commands: [commands],
   askAI: async (msg) => {
@@ -204,7 +208,7 @@ const speakerConfig = {
   checkInterval: keepAliveIntervalMs,
   exitKeepAliveAfter,
   checkTTSStatusAfter,
-  audioSilent: env.XIAOAI_AUDIO_SILENT || env.AUDIO_SILENT || undefined,
+  audioSilent,
   streamResponse: env.XIAOAI_STREAM_RESPONSE !== "false",
   debug: env.XIAOAI_DEBUG === "true",
 };
@@ -299,7 +303,7 @@ is_known_env_key() {
   case "$1" in
     MI_USER|MI_PASS|MI_PASS_TOKEN|MI_DID|MI_DEVICE_ID|XIAOAI_HARDWARE|\
     XIAOAI_DEFAULT_MODE|XIAOAI_CALL_KEYWORD|XIAOAI_WAKE_KEYWORD|XIAOAI_EXIT_KEYWORD|XIAOAI_STREAM_RESPONSE|XIAOAI_DEBUG|XIAOAI_SYSTEM_PROMPT|\
-    XIAOAI_HEARTBEAT_MS|XIAOAI_KEEPALIVE_INTERVAL_MS|XIAOAI_EXIT_KEEPALIVE_AFTER|XIAOAI_CHECK_TTS_STATUS_AFTER|XIAOAI_AUDIO_SILENT|AUDIO_SILENT|\
+    XIAOAI_HEARTBEAT_MS|XIAOAI_KEEPALIVE_INTERVAL_MS|XIAOAI_EXIT_KEEPALIVE_AFTER|XIAOAI_CHECK_TTS_STATUS_AFTER|XIAOAI_AUDIO_SILENT|AUDIO_SILENT|XIAOAI_DISABLE_DEFAULT_SILENT|XIAOAI_ENTER_AI_PROMPT|XIAOAI_EXIT_AI_PROMPT|\
     XIAOAI_DEFAULT_PROVIDER|CONVERSATION_TURNS|LLM_TIMEOUT_MS|TEST_TIMEOUT_MS|\
     XIAOAI_DOCKER_DNS|XIAOAI_DOCKER_NETWORK_MODE|\
     SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|\
@@ -423,6 +427,13 @@ normalize_env_file() {
   append_env_line "XIAOAI_KEEPALIVE_INTERVAL_MS" "500" "$tmp"
   append_env_line "XIAOAI_EXIT_KEEPALIVE_AFTER" "300" "$tmp"
   append_env_line "XIAOAI_CHECK_TTS_STATUS_AFTER" "1" "$tmp"
+  append_env_line "XIAOAI_DISABLE_DEFAULT_SILENT" "false" "$tmp"
+  if [ -n "$(env_value "XIAOAI_ENTER_AI_PROMPT")" ]; then
+    append_env_line "XIAOAI_ENTER_AI_PROMPT" "" "$tmp"
+  fi
+  if [ -n "$(env_value "XIAOAI_EXIT_AI_PROMPT")" ]; then
+    append_env_line "XIAOAI_EXIT_AI_PROMPT" "" "$tmp"
+  fi
   if [ -n "$(env_value "XIAOAI_AUDIO_SILENT")" ]; then
     append_env_line "XIAOAI_AUDIO_SILENT" "" "$tmp"
   fi
@@ -598,7 +609,7 @@ patch_config_for_custom_qa_command() {
 
 patch_config_for_flash_like_mode_state() {
   [ -f "$CONFIG_FILE" ] || return 0
-  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "modeKeywords(wakeUpKeywords, \"ai\")" "$CONFIG_FILE" && grep -q "heartbeat: heartbeatMs" "$CONFIG_FILE"; then
+  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "modeKeywords(wakeUpKeywords, \"ai\")" "$CONFIG_FILE" && grep -q "heartbeat: heartbeatMs" "$CONFIG_FILE" && grep -q "defaultAudioSilentUrl" "$CONFIG_FILE"; then
     return 0
   fi
   grep -q "function stripCallKeyword" "$CONFIG_FILE" || return 0
@@ -732,8 +743,27 @@ patch_config_for_flash_like_mode_state() {
     -e 's/\["关闭AI", "退出AI", "关闭小爱"\]/["关闭AI", "退出AI", "关闭小爱", "开启小爱", "切换小爱", "原生模式", "原生小爱"]/g' \
     -e 's/\["开启ai", "打开ai", "切换ai", "ai模式", "开启小爱"\]/["开启ai", "打开ai", "切换ai", "ai模式"]/g' \
     -e 's/\["关闭ai", "退出ai", "关闭小爱", "原生小爱", "原生模式", "切换小爱"\]/["开启小爱", "切换小爱", "原生模式", "原生小爱", "关闭ai", "退出ai", "关闭小爱"]/g' \
+    -e 's/  onEnterAI: \["AI模式已开启"\],/  onEnterAI: [],/g' \
+    -e 's/  onExitAI: \["AI模式已关闭"\],/  onExitAI: [],/g' \
+    -e 's/  audioSilent: env\.XIAOAI_AUDIO_SILENT || env\.AUDIO_SILENT || undefined,/  audioSilent,/g' \
     "$CONFIG_FILE" > "$tmp"
   mv "$tmp" "$CONFIG_FILE"
+  if ! grep -q "defaultAudioSilentUrl" "$CONFIG_FILE"; then
+    tmp="$CONFIG_FILE.tmp.$$"
+    awk '
+      {
+        print
+        if ($0 ~ /^const checkTTSStatusAfter = /) {
+          print "const defaultAudioSilentUrl = \"https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/assets/silent.mp3\";"
+          print "const audioSilent ="
+          print "  env.XIAOAI_AUDIO_SILENT ||"
+          print "  env.AUDIO_SILENT ||"
+          print "  (env.XIAOAI_DISABLE_DEFAULT_SILENT === \"true\" ? undefined : defaultAudioSilentUrl);"
+        }
+      }
+    ' "$CONFIG_FILE" > "$tmp"
+    mv "$tmp" "$CONFIG_FILE"
+  fi
   chmod 600 "$CONFIG_FILE"
   log "已给 $CONFIG_FILE 启用免刷机刷机版同款模式状态机"
 }

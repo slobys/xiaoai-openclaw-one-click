@@ -27,8 +27,13 @@ XIAOAI_KEEPALIVE_INTERVAL_MS=500
 XIAOAI_EXIT_KEEPALIVE_AFTER=300
 # XIAOAI_CHECK_TTS_STATUS_AFTER：TTS 下发后多久开始检测播放状态，单位秒。
 XIAOAI_CHECK_TTS_STATUS_AFTER=1
-# XIAOAI_AUDIO_SILENT：可选，音箱能访问的静音 mp3 URL；配置后 AI 模式优先播放静音音频压原生。
+# XIAOAI_AUDIO_SILENT：可选，音箱能访问的静音 mp3 URL；留空时默认用本项目内置静音 mp3。
 XIAOAI_AUDIO_SILENT=
+# XIAOAI_DISABLE_DEFAULT_SILENT：true 表示不用内置静音 mp3，回退 MiGPT 默认静音方式。
+XIAOAI_DISABLE_DEFAULT_SILENT=false
+# 默认关闭进入/退出 AI 的提示音，让“开启AI”后更快进入静音保活；需要提示可自行填写。
+XIAOAI_ENTER_AI_PROMPT=
+XIAOAI_EXIT_AI_PROMPT=
 XIAOAI_DEBUG=false
 
 # ===== 模型配置：沿用刷机版 .env =====

@@ -91,6 +91,11 @@ const heartbeatMs = envInt("XIAOAI_HEARTBEAT_MS", 500);
 const keepAliveIntervalMs = envInt("XIAOAI_KEEPALIVE_INTERVAL_MS", 500);
 const exitKeepAliveAfter = envInt("XIAOAI_EXIT_KEEPALIVE_AFTER", 300);
 const checkTTSStatusAfter = envInt("XIAOAI_CHECK_TTS_STATUS_AFTER", 1);
+const defaultAudioSilentUrl = "https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/assets/silent.mp3";
+const audioSilent =
+  env.XIAOAI_AUDIO_SILENT ||
+  env.AUDIO_SILENT ||
+  (env.XIAOAI_DISABLE_DEFAULT_SILENT === "true" ? undefined : defaultAudioSilentUrl);
 
 function envInt(name, fallback) {
   const n = Number.parseInt(env[name] || "", 10);
@@ -136,6 +141,8 @@ const exitKeywords = keywords(env.XIAOAI_EXIT_KEYWORD, [
   "原生模式",
   "原生小爱",
 ]);
+const enterAIPrompts = keywords(env.XIAOAI_ENTER_AI_PROMPT, []);
+const exitAIPrompts = keywords(env.XIAOAI_EXIT_AI_PROMPT, []);
 
 const systemPrompt = choose(CONFIG.systemPrompt, env.XIAOAI_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT);
 const conversationTurns = envInt("CONVERSATION_TURNS", 6);
@@ -499,8 +506,8 @@ const speakerConfig = {
   callAIKeywords,
   wakeUpKeywords: modeKeywords(wakeUpKeywords, "ai"),
   exitKeywords: modeKeywords(exitKeywords, "native"),
-  onEnterAI: ["AI模式已开启"],
-  onExitAI: ["AI模式已关闭"],
+  onEnterAI: enterAIPrompts,
+  onExitAI: exitAIPrompts,
   onAIAsking: [],
   onAIReplied: [],
   onAIError: ["连接模型失败，请稍后再试"],
@@ -523,7 +530,7 @@ const speakerConfig = {
   checkInterval: keepAliveIntervalMs,
   exitKeepAliveAfter,
   checkTTSStatusAfter,
-  audioSilent: env.XIAOAI_AUDIO_SILENT || env.AUDIO_SILENT || undefined,
+  audioSilent,
   streamResponse,
   debug: env.XIAOAI_DEBUG === "true",
   enableTrace: env.XIAOAI_DEBUG === "true",
