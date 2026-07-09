@@ -122,8 +122,16 @@ const callAIKeywords = keywords(env.XIAOAI_CALL_KEYWORD, [
   "文AI",
   "文 ai",
 ]);
-const wakeUpKeywords = keywords(env.XIAOAI_WAKE_KEYWORD, ["打开AI", "开启AI", "开启小爱"]);
-const exitKeywords = keywords(env.XIAOAI_EXIT_KEYWORD, ["关闭AI", "退出AI", "关闭小爱"]);
+const wakeUpKeywords = keywords(env.XIAOAI_WAKE_KEYWORD, ["打开AI", "开启AI"]);
+const exitKeywords = keywords(env.XIAOAI_EXIT_KEYWORD, [
+  "关闭AI",
+  "退出AI",
+  "关闭小爱",
+  "开启小爱",
+  "切换小爱",
+  "原生模式",
+  "原生小爱",
+]);
 
 const systemPrompt = choose(CONFIG.systemPrompt, env.XIAOAI_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT);
 const conversationTurns = envInt("CONVERSATION_TURNS", 6);
@@ -274,6 +282,16 @@ function stripCallKeyword(text) {
   const raw = String(text || "").trim();
   const hit = callAIKeywords.find((keyword) => raw.toLowerCase().startsWith(String(keyword).toLowerCase()));
   return hit ? raw.slice(hit.length).trim() : raw;
+}
+
+function modeKeywords(items, mode) {
+  const arr = [...items];
+  arr.some = function someWithMode(callback, thisArg) {
+    const matched = Array.prototype.some.call(this, callback, thisArg);
+    if (matched) noflashMode.mode = mode;
+    return matched;
+  };
+  return arr;
 }
 
 function historyMessages() {
@@ -475,8 +493,8 @@ const fallbackQACommand = {
 
 const speakerConfig = {
   callAIKeywords,
-  wakeUpKeywords: [],
-  exitKeywords: [],
+  wakeUpKeywords: modeKeywords(wakeUpKeywords, "ai"),
+  exitKeywords: modeKeywords(exitKeywords, "native"),
   onEnterAI: ["AI模式已开启"],
   onExitAI: ["AI模式已关闭"],
   onAIAsking: [],

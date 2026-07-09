@@ -67,6 +67,15 @@ globalThis.__xiaoai_noflash_mode = noflashMode;
 function list(value, fallback) {
   return `${value || ""},${fallback.join(",")}`.split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean);
 }
+function modeKeywords(items, mode) {
+  const arr = [...items];
+  arr.some = function someWithMode(callback, thisArg) {
+    const matched = Array.prototype.some.call(this, callback, thisArg);
+    if (matched) noflashMode.mode = mode;
+    return matched;
+  };
+  return arr;
+}
 const providers = {
   deepseek: { label: "deepseek", baseURL: env.DEEPSEEK_BASE_URL || "https://api.deepseek.com", apiKey: env.DEEPSEEK_API_KEY || "", model: env.DEEPSEEK_MODEL || "deepseek-v4-flash", kind: "openai" },
   openai: { label: "openai", baseURL: env.OPENAI_BASE_URL || "https://api.openai.com/v1", apiKey: env.OPENAI_API_KEY || "", model: env.OPENAI_MODEL || "gpt-4o-mini", kind: "openai" },
@@ -174,8 +183,8 @@ const commands = {
 };
 const speakerConfig = {
   callAIKeywords: list(env.XIAOAI_CALL_KEYWORD, ["问AI", "问 ai", "问小爱", "揾AI", "文AI"]),
-  wakeUpKeywords: [],
-  exitKeywords: [],
+  wakeUpKeywords: modeKeywords(list(env.XIAOAI_WAKE_KEYWORD, ["打开AI", "开启AI"]), "ai"),
+  exitKeywords: modeKeywords(list(env.XIAOAI_EXIT_KEYWORD, ["关闭AI", "退出AI", "关闭小爱", "开启小爱", "切换小爱", "原生模式", "原生小爱"]), "native"),
   onEnterAI: ["AI模式已开启"],
   onExitAI: ["AI模式已关闭"],
   onAIError: ["连接模型失败，请稍后再试"],
@@ -569,7 +578,7 @@ patch_config_for_custom_qa_command() {
 
 patch_config_for_flash_like_mode_state() {
   [ -f "$CONFIG_FILE" ] || return 0
-  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "wakeUpKeywords: \\[\\]" "$CONFIG_FILE"; then
+  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "modeKeywords(wakeUpKeywords, \"ai\")" "$CONFIG_FILE"; then
     return 0
   fi
   grep -q "function stripCallKeyword" "$CONFIG_FILE" || return 0
@@ -583,9 +592,14 @@ patch_config_for_flash_like_mode_state() {
   else
     has_noflash_mode=0
   fi
+  if grep -q "function modeKeywords" "$CONFIG_FILE"; then
+    has_mode_keywords=1
+  else
+    has_mode_keywords=0
+  fi
   tmp="$CONFIG_FILE.tmp.$$"
-  awk -v has_call_helper="$has_call_helper" -v has_noflash_mode="$has_noflash_mode" '
-    BEGIN { inserted_mode = has_noflash_mode; inserted_actions = 0; inserted_run = 0; in_command_action = 0 }
+  awk -v has_call_helper="$has_call_helper" -v has_noflash_mode="$has_noflash_mode" -v has_mode_keywords="$has_mode_keywords" '
+    BEGIN { inserted_mode = has_noflash_mode; inserted_keywords = has_mode_keywords; inserted_actions = 0; inserted_run = 0; in_command_action = 0 }
     {
       if (!inserted_mode && has_call_helper == 1 && $0 ~ /^function hasCallAIKeyword\(text\)/) {
         print "const noflashMode = globalThis.__xiaoai_noflash_mode || {"
@@ -607,6 +621,19 @@ patch_config_for_flash_like_mode_state() {
         print "}"
         print ""
         inserted_mode = 1
+      }
+      if (!inserted_keywords && $0 ~ /^function historyMessages\(\)/) {
+        print "function modeKeywords(items, mode) {"
+        print "  const arr = [...items];"
+        print "  arr.some = function someWithMode(callback, thisArg) {"
+        print "    const matched = Array.prototype.some.call(this, callback, thisArg);"
+        print "    if (matched) noflashMode.mode = mode;"
+        print "    return matched;"
+        print "  };"
+        print "  return arr;"
+        print "}"
+        print ""
+        inserted_keywords = 1
       }
       if ($0 ~ /^function commandAction\(text\)/) {
         in_command_action = 1
@@ -641,11 +668,11 @@ patch_config_for_flash_like_mode_state() {
         next
       }
       if ($0 ~ /^  wakeUpKeywords,$/ || $0 ~ /^  wakeUpKeywords: /) {
-        print "  wakeUpKeywords: [],"
+        print "  wakeUpKeywords: modeKeywords(wakeUpKeywords, \"ai\"),"
         next
       }
       if ($0 ~ /^  exitKeywords,$/ || $0 ~ /^  exitKeywords: /) {
-        print "  exitKeywords: [],"
+        print "  exitKeywords: modeKeywords(exitKeywords, \"native\"),"
         next
       }
       print
@@ -659,6 +686,8 @@ patch_config_for_flash_like_mode_state() {
   sed \
     -e 's/process\.env\.XIAOAI_DEFAULT_MODE || "ai"/process.env.XIAOAI_DEFAULT_MODE || "native"/g' \
     -e 's/env\.XIAOAI_DEFAULT_MODE || "ai"/env.XIAOAI_DEFAULT_MODE || "native"/g' \
+    -e 's/\["打开AI", "开启AI", "开启小爱"\]/["打开AI", "开启AI"]/g' \
+    -e 's/\["关闭AI", "退出AI", "关闭小爱"\]/["关闭AI", "退出AI", "关闭小爱", "开启小爱", "切换小爱", "原生模式", "原生小爱"]/g' \
     -e 's/\["开启ai", "打开ai", "切换ai", "ai模式", "开启小爱"\]/["开启ai", "打开ai", "切换ai", "ai模式"]/g' \
     -e 's/\["关闭ai", "退出ai", "关闭小爱", "原生小爱", "原生模式", "切换小爱"\]/["开启小爱", "切换小爱", "原生模式", "原生小爱", "关闭ai", "退出ai", "关闭小爱"]/g' \
     "$CONFIG_FILE" > "$tmp"
