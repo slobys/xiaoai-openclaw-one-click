@@ -11,8 +11,10 @@ MI_DID=
 XIAOAI_HARDWARE=LX06
 
 # ===== 语音触发 =====
-# 问AI/问小爱：单次 AI 问答；普通问句保留给原生小爱，避免双答。
-# 开启AI/开启小爱：进入连续 AI 对话。
+# XIAOAI_DEFAULT_MODE：默认 ai 时更接近刷机版，普通问题优先交给 AI；说“关闭AI/原生小爱”可切回原生。
+XIAOAI_DEFAULT_MODE=ai
+# 问AI/问小爱：即使当前是原生模式，也可单次交给 AI。
+# 开启AI/开启小爱：切回 AI；关闭AI/原生小爱：切回原生小爱。
 XIAOAI_CALL_KEYWORD=问AI
 XIAOAI_WAKE_KEYWORD=开启AI
 XIAOAI_EXIT_KEYWORD=关闭AI

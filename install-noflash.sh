@@ -62,6 +62,8 @@ function compact(text) {
 function norm(text) {
   return compact(text).normalize("NFKC").replace(/\s+/g, "").replace(/[，。！？；：、,.!?;:~`"'“”‘’（）()【】[\]{}<>《》]/g, "").toLowerCase();
 }
+const noflashMode = globalThis.__xiaoai_noflash_mode || { mode: norm(env.XIAOAI_DEFAULT_MODE || "ai") === "native" ? "native" : "ai" };
+globalThis.__xiaoai_noflash_mode = noflashMode;
 function list(value, fallback) {
   return `${value || ""},${fallback.join(",")}`.split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean);
 }
@@ -135,6 +137,8 @@ async function callLLM(name, text, testing = false) {
 }
 function action(text) {
   const c = norm(text);
+  if (["开启ai", "打开ai", "切换ai", "ai模式", "开启小爱"].includes(c)) return { type: "ai-mode" };
+  if (["关闭ai", "退出ai", "关闭小爱", "原生小爱", "原生模式", "切换小爱"].includes(c)) return { type: "native-mode" };
   if (["当前模型", "查看模型", "当前模式"].includes(c)) return { type: "current" };
   if (["清空上下文", "清除上下文", "清空对话"].includes(c)) return { type: "clear" };
   if (["测试模型", "测试当前模型"].includes(c)) return { type: "test" };
@@ -143,9 +147,20 @@ function action(text) {
   return null;
 }
 const commands = {
-  match: (msg) => !!action(msg.text),
+  match: (msg) => {
+    const text = compact(msg.text);
+    if (!text) return false;
+    return !!action(text) || noflashMode.mode === "ai";
+  },
   run: async (msg) => {
+    const text = compact(msg.text);
     const a = action(msg.text);
+    if (!a) {
+      try { const answer = await callLLM(state.provider, text); remember(text, answer); return { text: answer || "我没听清，你能再说一次吗？" }; }
+      catch (err) { return { text: `${providerName(state.provider)} 调用失败：${explain(err)}` }; }
+    }
+    if (a.type === "ai-mode") { noflashMode.mode = "ai"; state.messages = []; return { text: "已切换到AI模式。" }; }
+    if (a.type === "native-mode") { noflashMode.mode = "native"; state.messages = []; return { text: "已切换到原生小爱模式。" }; }
     if (a.type === "current") return { text: `当前模型是 ${providerName(state.provider)}，模型名 ${providers[state.provider]?.model || ""}。` };
     if (a.type === "clear") { state.messages = []; return { text: "已清空上下文。" }; }
     if (a.type === "switch") { if (!a.provider) return { text: "没听清要切换到哪个模型。" }; state.provider = a.provider; state.messages = []; return { text: `已切换到 ${providerName(a.provider)}。` }; }
@@ -158,8 +173,8 @@ const commands = {
 };
 const speakerConfig = {
   callAIKeywords: list(env.XIAOAI_CALL_KEYWORD, ["问AI", "问 ai", "问小爱", "揾AI", "文AI"]),
-  wakeUpKeywords: list(env.XIAOAI_WAKE_KEYWORD, ["打开AI", "开启AI", "开启小爱"]),
-  exitKeywords: list(env.XIAOAI_EXIT_KEYWORD, ["关闭AI", "退出AI", "关闭小爱"]),
+  wakeUpKeywords: [],
+  exitKeywords: [],
   onEnterAI: ["AI模式已开启"],
   onExitAI: ["AI模式已关闭"],
   onAIError: ["连接模型失败，请稍后再试"],
@@ -264,7 +279,7 @@ env_or_default() {
 is_known_env_key() {
   case "$1" in
     MI_USER|MI_PASS|MI_PASS_TOKEN|MI_DID|MI_DEVICE_ID|XIAOAI_HARDWARE|\
-    XIAOAI_CALL_KEYWORD|XIAOAI_WAKE_KEYWORD|XIAOAI_EXIT_KEYWORD|XIAOAI_STREAM_RESPONSE|XIAOAI_DEBUG|XIAOAI_SYSTEM_PROMPT|\
+    XIAOAI_DEFAULT_MODE|XIAOAI_CALL_KEYWORD|XIAOAI_WAKE_KEYWORD|XIAOAI_EXIT_KEYWORD|XIAOAI_STREAM_RESPONSE|XIAOAI_DEBUG|XIAOAI_SYSTEM_PROMPT|\
     XIAOAI_DEFAULT_PROVIDER|CONVERSATION_TURNS|LLM_TIMEOUT_MS|TEST_TIMEOUT_MS|\
     XIAOAI_DOCKER_DNS|XIAOAI_DOCKER_NETWORK_MODE|\
     SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|\
@@ -375,9 +390,11 @@ normalize_env_file() {
 
   {
     printf '\n%s\n' '# ===== 语音触发 ====='
-    printf '%s\n' '# 问AI/问小爱：单次 AI 问答；普通问句保留给原生小爱，避免双答。'
-    printf '%s\n' '# 开启AI/开启小爱：进入连续 AI 对话。'
+    printf '%s\n' '# XIAOAI_DEFAULT_MODE：默认 ai 时更接近刷机版，普通问题优先交给 AI；说“关闭AI/原生小爱”可切回原生。'
+    printf '%s\n' '# 问AI/问小爱：即使当前是原生模式，也可单次交给 AI。'
+    printf '%s\n' '# 开启AI/开启小爱：切回 AI；关闭AI/原生小爱：切回原生小爱。'
   } >> "$tmp"
+  append_env_line "XIAOAI_DEFAULT_MODE" "ai" "$tmp"
   append_env_line "XIAOAI_CALL_KEYWORD" "问AI" "$tmp"
   append_env_line "XIAOAI_WAKE_KEYWORD" "开启AI" "$tmp"
   append_env_line "XIAOAI_EXIT_KEYWORD" "关闭AI" "$tmp"
@@ -508,6 +525,11 @@ patch_config_for_custom_qa_command() {
   awk '
     {
       if ($0 ~ /^export default \{/) {
+        print "const noflashMode = globalThis.__xiaoai_noflash_mode || {"
+        print "  mode: normalizeCommand(process.env.XIAOAI_DEFAULT_MODE || \"ai\") === \"native\" ? \"native\" : \"ai\","
+        print "};"
+        print "globalThis.__xiaoai_noflash_mode = noflashMode;"
+        print ""
         print "function hasCallAIKeyword(text) {"
         print "  const cmd = normalizeCommand(text);"
         print "  return callAIKeywords.some((keyword) => cmd.startsWith(normalizeCommand(keyword)));"
@@ -517,7 +539,7 @@ patch_config_for_custom_qa_command() {
         print "  match: (msg) => {"
         print "    const text = String(msg?.text || \"\").trim();"
         print "    if (!text) return false;"
-        print "    return hasCallAIKeyword(text) && !commandAction(text);"
+        print "    return (noflashMode.mode === \"ai\" || hasCallAIKeyword(text)) && !commandAction(text);"
         print "  },"
         print "  run: async (msg) => {"
         print "    const userText = stripCallKeyword(msg.text);"
@@ -544,34 +566,88 @@ patch_config_for_custom_qa_command() {
   log "已给 $CONFIG_FILE 补充连续对话自定义问答逻辑"
 }
 
-patch_config_for_strict_ai_trigger() {
+patch_config_for_noflash_default_ai_mode() {
   [ -f "$CONFIG_FILE" ] || return 0
-  if grep -q "hasCallAIKeyword" "$CONFIG_FILE" && ! grep -q "return !commandAction(text);" "$CONFIG_FILE"; then
+  if grep -q "noflashMode" "$CONFIG_FILE" && grep -q "noflashMode.mode === \"ai\"" "$CONFIG_FILE" && grep -q "ai-mode" "$CONFIG_FILE" && grep -q "wakeUpKeywords: \\[\\]" "$CONFIG_FILE"; then
     return 0
   fi
   grep -q "function stripCallKeyword" "$CONFIG_FILE" || return 0
+  if grep -q "function hasCallAIKeyword" "$CONFIG_FILE"; then
+    has_call_helper=1
+  else
+    has_call_helper=0
+  fi
   tmp="$CONFIG_FILE.tmp.$$"
-  awk '
-    BEGIN { inserted_helper = 0 }
+  awk -v has_call_helper="$has_call_helper" '
+    BEGIN { inserted_mode = 0; inserted_actions = 0; inserted_run = 0; in_command_action = 0 }
     {
-      if (!inserted_helper && $0 ~ /^function stripCallKeyword\(text\)/) {
+      if (!inserted_mode && has_call_helper == 1 && $0 ~ /^function hasCallAIKeyword\(text\)/) {
+        print "const noflashMode = globalThis.__xiaoai_noflash_mode || {"
+        print "  mode: normalizeCommand(process.env.XIAOAI_DEFAULT_MODE || \"ai\") === \"native\" ? \"native\" : \"ai\","
+        print "};"
+        print "globalThis.__xiaoai_noflash_mode = noflashMode;"
+        print ""
+        inserted_mode = 1
+      }
+      if (!inserted_mode && has_call_helper == 0 && $0 ~ /^function stripCallKeyword\(text\)/) {
+        print "const noflashMode = globalThis.__xiaoai_noflash_mode || {"
+        print "  mode: normalizeCommand(process.env.XIAOAI_DEFAULT_MODE || \"ai\") === \"native\" ? \"native\" : \"ai\","
+        print "};"
+        print "globalThis.__xiaoai_noflash_mode = noflashMode;"
+        print ""
         print "function hasCallAIKeyword(text) {"
         print "  const cmd = normalizeCommand(text);"
         print "  return callAIKeywords.some((keyword) => cmd.startsWith(normalizeCommand(keyword)));"
         print "}"
         print ""
-        inserted_helper = 1
+        inserted_mode = 1
       }
-      if ($0 ~ /return !commandAction\(text\);/) {
-        print "    return hasCallAIKeyword(text) && !commandAction(text);"
+      if ($0 ~ /^function commandAction\(text\)/) {
+        in_command_action = 1
+      }
+      if (in_command_action && !inserted_actions && $0 ~ /^  const cmd = normalizeCommand\(text\);$/) {
+        print
+        print "  if ([\"开启ai\", \"打开ai\", \"切换ai\", \"ai模式\", \"开启小爱\"].includes(cmd)) return { type: \"ai-mode\" };"
+        print "  if ([\"关闭ai\", \"退出ai\", \"关闭小爱\", \"原生小爱\", \"原生模式\", \"切换小爱\"].includes(cmd)) return { type: \"native-mode\" };"
+        inserted_actions = 1
+        next
+      }
+      if (!inserted_run && $0 ~ /^    if \(!action\) return undefined;$/) {
+        print
+        print "    if (action.type === \"ai-mode\") {"
+        print "      noflashMode.mode = \"ai\";"
+        print "      llmState.messages = [];"
+        print "      return { text: \"已切换到AI模式。\" };"
+        print "    }"
+        print "    if (action.type === \"native-mode\") {"
+        print "      noflashMode.mode = \"native\";"
+        print "      llmState.messages = [];"
+        print "      return { text: \"已切换到原生小爱模式。\" };"
+        print "    }"
+        inserted_run = 1
+        next
+      }
+      if ($0 ~ /return hasCallAIKeyword\(text\) && !commandAction\(text\);/ || $0 ~ /return !commandAction\(text\);/) {
+        print "    return (noflashMode.mode === \"ai\" || hasCallAIKeyword(text)) && !commandAction(text);"
+        next
+      }
+      if ($0 ~ /^  wakeUpKeywords,$/ || $0 ~ /^  wakeUpKeywords: /) {
+        print "  wakeUpKeywords: [],"
+        next
+      }
+      if ($0 ~ /^  exitKeywords,$/ || $0 ~ /^  exitKeywords: /) {
+        print "  exitKeywords: [],"
         next
       }
       print
+      if (in_command_action && $0 ~ /^}/) {
+        in_command_action = 0
+      }
     }
   ' "$CONFIG_FILE" > "$tmp"
   mv "$tmp" "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE"
-  log "已收紧 $CONFIG_FILE 的免刷机 AI 触发条件，避免原生小爱和 AI 抢答"
+  log "已给 $CONFIG_FILE 启用免刷机默认 AI 模式，体验更接近刷机版"
 }
 
 set_env() {
@@ -714,7 +790,7 @@ prepare_files() {
   fi
   patch_config_for_migpt_openai_env
   patch_config_for_custom_qa_command
-  patch_config_for_strict_ai_trigger
+  patch_config_for_noflash_default_ai_mode
   ln -sf "$(basename "$CONFIG_FILE")" "$WORK_DIR/.migpt.js" 2>/dev/null || true
   ln -sf "$(basename "$ENV_FILE")" "$LEGACY_ENV_FILE" 2>/dev/null || true
   [ -s "$WORK_DIR/.mi.json" ] || printf '{}\n' > "$WORK_DIR/.mi.json"
