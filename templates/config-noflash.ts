@@ -147,8 +147,8 @@ const exitKeywords = keywords(env.XIAOAI_EXIT_KEYWORD, [
   "原生模式",
   "原生小爱",
 ]);
-const enterAIPrompts = promptList(env.XIAOAI_ENTER_AI_PROMPT, ["好"]);
-const exitAIPrompts = promptList(env.XIAOAI_EXIT_AI_PROMPT, ["好"]);
+const enterAIPrompts = promptList(env.XIAOAI_ENTER_AI_PROMPT, ["已切换AI模式"]);
+const exitAIPrompts = promptList(env.XIAOAI_EXIT_AI_PROMPT, ["已切换小爱模式"]);
 
 const systemPrompt = choose(CONFIG.systemPrompt, env.XIAOAI_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT);
 const conversationTurns = envInt("CONVERSATION_TURNS", 6);
@@ -449,12 +449,12 @@ const providerCommands = {
     if (action.type === "ai-mode") {
       noflashMode.mode = "ai";
       llmState.messages = [];
-      return { text: "已切换到AI模式。" };
+      return { text: "已切换AI模式" };
     }
     if (action.type === "native-mode") {
       noflashMode.mode = "native";
       llmState.messages = [];
-      return { text: "已切换到原生小爱模式。" };
+      return { text: "已切换小爱模式" };
     }
     if (["switch", "test"].includes(action.type) && noflashMode.mode !== "ai") {
       return { text: "请先说：开启AI。" };

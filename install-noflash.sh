@@ -87,8 +87,8 @@ function modeKeywords(items, mode) {
   };
   return arr;
 }
-const enterAIPrompts = promptList(env.XIAOAI_ENTER_AI_PROMPT, ["好"]);
-const exitAIPrompts = promptList(env.XIAOAI_EXIT_AI_PROMPT, ["好"]);
+const enterAIPrompts = promptList(env.XIAOAI_ENTER_AI_PROMPT, ["已切换AI模式"]);
+const exitAIPrompts = promptList(env.XIAOAI_EXIT_AI_PROMPT, ["已切换小爱模式"]);
 const providers = {
   deepseek: { label: "deepseek", baseURL: env.DEEPSEEK_BASE_URL || "https://api.deepseek.com", apiKey: env.DEEPSEEK_API_KEY || "", model: env.DEEPSEEK_MODEL || "deepseek-v4-flash", kind: "openai" },
   openai: { label: "openai", baseURL: env.OPENAI_BASE_URL || "https://api.openai.com/v1", apiKey: env.OPENAI_API_KEY || "", model: env.OPENAI_MODEL || "gpt-4o-mini", kind: "openai" },
@@ -181,8 +181,8 @@ const commands = {
       try { const answer = await callLLM(state.provider, text); remember(text, answer); return { text: answer || "我没听清，你能再说一次吗？" }; }
       catch (err) { return { text: `${providerName(state.provider)} 调用失败：${explain(err)}` }; }
     }
-    if (a.type === "ai-mode") { noflashMode.mode = "ai"; state.messages = []; return { text: "已切换到AI模式。" }; }
-    if (a.type === "native-mode") { noflashMode.mode = "native"; state.messages = []; return { text: "已切换到原生小爱模式。" }; }
+    if (a.type === "ai-mode") { noflashMode.mode = "ai"; state.messages = []; return { text: "已切换AI模式" }; }
+    if (a.type === "native-mode") { noflashMode.mode = "native"; state.messages = []; return { text: "已切换小爱模式" }; }
     if (["switch", "test"].includes(a.type) && noflashMode.mode !== "ai") return { text: "请先说：开启AI。" };
     if (a.type === "current") return { text: `当前模型是 ${providerName(state.provider)}，模型名 ${providers[state.provider]?.model || ""}。` };
     if (a.type === "clear") { state.messages = []; return { text: "已清空上下文。" }; }
@@ -614,7 +614,7 @@ patch_config_for_custom_qa_command() {
 
 patch_config_for_flash_like_mode_state() {
   [ -f "$CONFIG_FILE" ] || return 0
-  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "modeKeywords(wakeUpKeywords, \"ai\")" "$CONFIG_FILE" && grep -q "heartbeat: heartbeatMs" "$CONFIG_FILE" && grep -q "defaultAudioSilentUrl" "$CONFIG_FILE" && grep -q "function promptList" "$CONFIG_FILE" && grep -q '"切换AI", "AI模式"' "$CONFIG_FILE"; then
+  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "modeKeywords(wakeUpKeywords, \"ai\")" "$CONFIG_FILE" && grep -q "heartbeat: heartbeatMs" "$CONFIG_FILE" && grep -q "defaultAudioSilentUrl" "$CONFIG_FILE" && grep -q "function promptList" "$CONFIG_FILE" && grep -q '"切换AI", "AI模式"' "$CONFIG_FILE" && grep -q "已切换AI模式" "$CONFIG_FILE" && grep -q "已切换小爱模式" "$CONFIG_FILE"; then
     return 0
   fi
   grep -q "function stripCallKeyword" "$CONFIG_FILE" || return 0
@@ -700,12 +700,12 @@ patch_config_for_flash_like_mode_state() {
         print "    if (action.type === \"ai-mode\") {"
         print "      noflashMode.mode = \"ai\";"
         print "      llmState.messages = [];"
-        print "      return { text: \"已切换到AI模式。\" };"
+        print "      return { text: \"已切换AI模式\" };"
         print "    }"
         print "    if (action.type === \"native-mode\") {"
         print "      noflashMode.mode = \"native\";"
         print "      llmState.messages = [];"
-        print "      return { text: \"已切换到原生小爱模式。\" };"
+        print "      return { text: \"已切换小爱模式\" };"
         print "    }"
         print "    if ([\"switch\", \"test\"].includes(action.type) && noflashMode.mode !== \"ai\") {"
         print "      return { text: \"请先说：开启AI。\" };"
@@ -749,10 +749,14 @@ patch_config_for_flash_like_mode_state() {
     -e 's/\["关闭AI", "退出AI", "关闭小爱"\]/["关闭AI", "退出AI", "关闭小爱", "开启小爱", "切换小爱", "原生模式", "原生小爱"]/g' \
     -e 's/\["开启ai", "打开ai", "切换ai", "ai模式", "开启小爱"\]/["开启ai", "打开ai", "切换ai", "ai模式"]/g' \
     -e 's/\["关闭ai", "退出ai", "关闭小爱", "原生小爱", "原生模式", "切换小爱"\]/["开启小爱", "切换小爱", "原生模式", "原生小爱", "关闭ai", "退出ai", "关闭小爱"]/g' \
-    -e 's/  onEnterAI: \["AI模式已开启"\],/  onEnterAI: ["好"],/g' \
-    -e 's/  onExitAI: \["AI模式已关闭"\],/  onExitAI: ["好"],/g' \
-    -e 's/const enterAIPrompts = keywords(env\.XIAOAI_ENTER_AI_PROMPT, \[\]);/const enterAIPrompts = promptList(env.XIAOAI_ENTER_AI_PROMPT, ["好"]);/g' \
-    -e 's/const exitAIPrompts = keywords(env\.XIAOAI_EXIT_AI_PROMPT, \[\]);/const exitAIPrompts = promptList(env.XIAOAI_EXIT_AI_PROMPT, ["好"]);/g' \
+    -e 's/  onEnterAI: \["AI模式已开启"\],/  onEnterAI: ["已切换AI模式"],/g' \
+    -e 's/  onExitAI: \["AI模式已关闭"\],/  onExitAI: ["已切换小爱模式"],/g' \
+    -e 's/const enterAIPrompts = promptList(env\.XIAOAI_ENTER_AI_PROMPT, \["好"\]);/const enterAIPrompts = promptList(env.XIAOAI_ENTER_AI_PROMPT, ["已切换AI模式"]);/g' \
+    -e 's/const exitAIPrompts = promptList(env\.XIAOAI_EXIT_AI_PROMPT, \["好"\]);/const exitAIPrompts = promptList(env.XIAOAI_EXIT_AI_PROMPT, ["已切换小爱模式"]);/g' \
+    -e 's/const enterAIPrompts = keywords(env\.XIAOAI_ENTER_AI_PROMPT, \[\]);/const enterAIPrompts = promptList(env.XIAOAI_ENTER_AI_PROMPT, ["已切换AI模式"]);/g' \
+    -e 's/const exitAIPrompts = keywords(env\.XIAOAI_EXIT_AI_PROMPT, \[\]);/const exitAIPrompts = promptList(env.XIAOAI_EXIT_AI_PROMPT, ["已切换小爱模式"]);/g' \
+    -e 's/return { text: "已切换到AI模式。" };/return { text: "已切换AI模式" };/g' \
+    -e 's/return { text: "已切换到原生小爱模式。" };/return { text: "已切换小爱模式" };/g' \
     -e 's/  audioSilent: env\.XIAOAI_AUDIO_SILENT || env\.AUDIO_SILENT || undefined,/  audioSilent,/g' \
     "$CONFIG_FILE" > "$tmp"
   mv "$tmp" "$CONFIG_FILE"
