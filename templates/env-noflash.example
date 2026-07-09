@@ -1,0 +1,64 @@
+# ===== 免刷机账号配置 =====
+# MI_USER：小米 ID，不是手机号或邮箱。
+MI_USER=
+# MI_PASS：小米账号密码；使用 passToken Cookie 时可留空。
+MI_PASS=
+# MI_PASS_TOKEN：浏览器已登录小米账号后的 passToken Cookie，可填 passToken 值或整段 Cookie。
+MI_PASS_TOKEN=
+# MI_DID：米家中的音箱名称或设备 DID。
+MI_DID=
+# XIAOAI_HARDWARE：音箱型号代码，例如 LX06、L05B、OH2P。
+XIAOAI_HARDWARE=LX06
+
+# ===== 语音触发 =====
+# 问AI/问小爱：单次问答；开启AI/开启小爱：进入连续对话。
+XIAOAI_CALL_KEYWORD=问AI
+XIAOAI_WAKE_KEYWORD=开启AI
+XIAOAI_EXIT_KEYWORD=关闭AI
+XIAOAI_STREAM_RESPONSE=true
+XIAOAI_DEBUG=false
+
+# ===== 模型配置：沿用刷机版 .env =====
+# DEEPSEEK_API_KEY：DeepSeek 官方 API Key；说“切换 deepseek”后使用。
+DEEPSEEK_API_KEY=
+# DEEPSEEK_MODEL：DeepSeek 模型名；默认使用 deepseek-v4-flash。
+DEEPSEEK_MODEL=deepseek-v4-flash
+# DEEPSEEK_BASE_URL：DeepSeek OpenAI 兼容接口地址；官方默认不带 /v1。
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+# OPENAI_API_KEY：OpenAI 官方或兼容接口 API Key；说“切换 openai”后使用。
+OPENAI_API_KEY=
+# GEMINI_API_KEY：Gemini API Key；说“切换 gemini”或“切换谷歌”后使用。
+GEMINI_API_KEY=
+# GEMINI_MODEL：Gemini 模型名。
+GEMINI_MODEL=gemini-3.1-flash-lite-preview
+# OPENAI_BASE_URL：OpenAI 接口地址；兼容服务可改成自己的 /v1 地址。
+OPENAI_BASE_URL=https://api.openai.com/v1
+# OPENAI_MODEL：OpenAI 模型名。
+OPENAI_MODEL=gpt-4o-mini
+# XIAOAI_DEFAULT_PROVIDER：默认模型来源；deepseek/openai/gemini/openclaw/ollama。
+XIAOAI_DEFAULT_PROVIDER=deepseek
+# CONVERSATION_TURNS：连续对话保留轮数；0 表示不保留上下文。
+CONVERSATION_TURNS=6
+
+# OPENCLAW_BASE_URL：OpenClaw API Bridge 地址；OpenClaw 在另一台设备时改成 http://OpenClaw设备IP:11435/v1。
+OPENCLAW_BASE_URL=http://192.168.2.238:11435/v1
+# OPENCLAW_API_KEY：OpenClaw API Bridge 鉴权 Key；需和部署 Bridge 时的 OPENCLAW_BRIDGE_TOKEN 一致，默认本地测试可用 xiaoai-local。
+OPENCLAW_API_KEY=xiaoai-local
+# OPENCLAW_DISPLAY_MODEL：语音里显示/切换用的模型名；默认说“切换 open”即可使用 OpenClaw。
+OPENCLAW_DISPLAY_MODEL=open
+# OPENCLAW_TIMEOUT_MS：OpenClaw 正常问答超时时间，单位毫秒；OpenClaw 响应慢时可适当调大。
+OPENCLAW_TIMEOUT_MS=90000
+# OPENCLAW_TEST_TIMEOUT_MS：“测试模型”命令的超时时间，单位毫秒；一般保持 30000 即可。
+OPENCLAW_TEST_TIMEOUT_MS=30000
+
+# SPEAK_CHUNK_LEN：每段最多字符数；越小越不容易漏字，但回答会被切成更多段。
+SPEAK_CHUNK_LEN=28
+# SPEAK_MS_PER_CHAR：每个字预估播报耗时，单位毫秒；音箱抢播/漏字时可调大。
+SPEAK_MS_PER_CHAR=220
+# SPEAK_CHUNK_GAP_MS：每段播报之间的额外间隔，单位毫秒；仍漏字时可从 260 调到 400。
+SPEAK_CHUNK_GAP_MS=260
+
+# OLLAMA_BASE_URL：Ollama OpenAI 兼容地址；Ollama 在局域网电脑时改成 http://电脑IP:11434/v1。
+OLLAMA_BASE_URL=http://192.168.2.193:11434/v1
+# OLLAMA_MODEL：Ollama 模型名；必须和 ollama list 里的模型名一致，说“切换 ollama”后使用。
+OLLAMA_MODEL=qwen3:4b
