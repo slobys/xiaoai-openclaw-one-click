@@ -87,6 +87,10 @@ const commandMap = {
 const hardware = (env.XIAOAI_HARDWARE || "LX06").toUpperCase();
 const speakerCommands = commandMap[hardware] || commandMap.LX06;
 const streamResponse = env.XIAOAI_STREAM_RESPONSE !== "false";
+const heartbeatMs = envInt("XIAOAI_HEARTBEAT_MS", 500);
+const keepAliveIntervalMs = envInt("XIAOAI_KEEPALIVE_INTERVAL_MS", 500);
+const exitKeepAliveAfter = envInt("XIAOAI_EXIT_KEEPALIVE_AFTER", 300);
+const checkTTSStatusAfter = envInt("XIAOAI_CHECK_TTS_STATUS_AFTER", 1);
 
 function envInt(name, fallback) {
   const n = Number.parseInt(env[name] || "", 10);
@@ -515,6 +519,11 @@ const speakerConfig = {
   ttsCommand: speakerCommands.tts,
   wakeUpCommand: speakerCommands.wake,
   playingCommand: speakerCommands.playing,
+  heartbeat: heartbeatMs,
+  checkInterval: keepAliveIntervalMs,
+  exitKeepAliveAfter,
+  checkTTSStatusAfter,
+  audioSilent: env.XIAOAI_AUDIO_SILENT || env.AUDIO_SILENT || undefined,
   streamResponse,
   debug: env.XIAOAI_DEBUG === "true",
   enableTrace: env.XIAOAI_DEBUG === "true",

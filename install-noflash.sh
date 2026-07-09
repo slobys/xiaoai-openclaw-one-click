@@ -56,6 +56,10 @@ function envInt(name, fallback) {
   const n = Number.parseInt(env[name] || "", 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
+const heartbeatMs = envInt("XIAOAI_HEARTBEAT_MS", 500);
+const keepAliveIntervalMs = envInt("XIAOAI_KEEPALIVE_INTERVAL_MS", 500);
+const exitKeepAliveAfter = envInt("XIAOAI_EXIT_KEEPALIVE_AFTER", 300);
+const checkTTSStatusAfter = envInt("XIAOAI_CHECK_TTS_STATUS_AFTER", 1);
 function compact(text) {
   return String(text || "").replace(/\s+/g, " ").trim();
 }
@@ -196,6 +200,11 @@ const speakerConfig = {
   },
   ttsCommand: speakerCommands.tts,
   wakeUpCommand: speakerCommands.wake,
+  heartbeat: heartbeatMs,
+  checkInterval: keepAliveIntervalMs,
+  exitKeepAliveAfter,
+  checkTTSStatusAfter,
+  audioSilent: env.XIAOAI_AUDIO_SILENT || env.AUDIO_SILENT || undefined,
   streamResponse: env.XIAOAI_STREAM_RESPONSE !== "false",
   debug: env.XIAOAI_DEBUG === "true",
 };
@@ -290,6 +299,7 @@ is_known_env_key() {
   case "$1" in
     MI_USER|MI_PASS|MI_PASS_TOKEN|MI_DID|MI_DEVICE_ID|XIAOAI_HARDWARE|\
     XIAOAI_DEFAULT_MODE|XIAOAI_CALL_KEYWORD|XIAOAI_WAKE_KEYWORD|XIAOAI_EXIT_KEYWORD|XIAOAI_STREAM_RESPONSE|XIAOAI_DEBUG|XIAOAI_SYSTEM_PROMPT|\
+    XIAOAI_HEARTBEAT_MS|XIAOAI_KEEPALIVE_INTERVAL_MS|XIAOAI_EXIT_KEEPALIVE_AFTER|XIAOAI_CHECK_TTS_STATUS_AFTER|XIAOAI_AUDIO_SILENT|AUDIO_SILENT|\
     XIAOAI_DEFAULT_PROVIDER|CONVERSATION_TURNS|LLM_TIMEOUT_MS|TEST_TIMEOUT_MS|\
     XIAOAI_DOCKER_DNS|XIAOAI_DOCKER_NETWORK_MODE|\
     SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|\
@@ -409,6 +419,16 @@ normalize_env_file() {
   append_env_line "XIAOAI_WAKE_KEYWORD" "开启AI" "$tmp"
   append_env_line "XIAOAI_EXIT_KEYWORD" "关闭AI" "$tmp"
   append_env_value "XIAOAI_STREAM_RESPONSE" "true" "$tmp"
+  append_env_line "XIAOAI_HEARTBEAT_MS" "500" "$tmp"
+  append_env_line "XIAOAI_KEEPALIVE_INTERVAL_MS" "500" "$tmp"
+  append_env_line "XIAOAI_EXIT_KEEPALIVE_AFTER" "300" "$tmp"
+  append_env_line "XIAOAI_CHECK_TTS_STATUS_AFTER" "1" "$tmp"
+  if [ -n "$(env_value "XIAOAI_AUDIO_SILENT")" ]; then
+    append_env_line "XIAOAI_AUDIO_SILENT" "" "$tmp"
+  fi
+  if [ -n "$(env_value "AUDIO_SILENT")" ]; then
+    append_env_line "AUDIO_SILENT" "" "$tmp"
+  fi
   append_env_line "XIAOAI_DEBUG" "false" "$tmp"
   if [ -n "$(env_value "XIAOAI_SYSTEM_PROMPT")" ]; then
     append_env_line "XIAOAI_SYSTEM_PROMPT" "" "$tmp"
@@ -578,7 +598,7 @@ patch_config_for_custom_qa_command() {
 
 patch_config_for_flash_like_mode_state() {
   [ -f "$CONFIG_FILE" ] || return 0
-  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "modeKeywords(wakeUpKeywords, \"ai\")" "$CONFIG_FILE"; then
+  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "modeKeywords(wakeUpKeywords, \"ai\")" "$CONFIG_FILE" && grep -q "heartbeat: heartbeatMs" "$CONFIG_FILE"; then
     return 0
   fi
   grep -q "function stripCallKeyword" "$CONFIG_FILE" || return 0
@@ -597,10 +617,24 @@ patch_config_for_flash_like_mode_state() {
   else
     has_mode_keywords=0
   fi
+  if grep -q "heartbeat: heartbeatMs" "$CONFIG_FILE"; then
+    has_keepalive_tuning=1
+  else
+    has_keepalive_tuning=0
+  fi
   tmp="$CONFIG_FILE.tmp.$$"
-  awk -v has_call_helper="$has_call_helper" -v has_noflash_mode="$has_noflash_mode" -v has_mode_keywords="$has_mode_keywords" '
-    BEGIN { inserted_mode = has_noflash_mode; inserted_keywords = has_mode_keywords; inserted_actions = 0; inserted_run = 0; in_command_action = 0 }
+  awk -v has_call_helper="$has_call_helper" -v has_noflash_mode="$has_noflash_mode" -v has_mode_keywords="$has_mode_keywords" -v has_keepalive_tuning="$has_keepalive_tuning" '
+    BEGIN { inserted_mode = has_noflash_mode; inserted_keywords = has_mode_keywords; inserted_tuning_consts = has_keepalive_tuning; inserted_tuning_fields = has_keepalive_tuning; inserted_actions = 0; inserted_run = 0; in_command_action = 0 }
     {
+      if (!inserted_tuning_consts && $0 ~ /^const streamResponse = /) {
+        print
+        print "const heartbeatMs = envInt(\"XIAOAI_HEARTBEAT_MS\", 500);"
+        print "const keepAliveIntervalMs = envInt(\"XIAOAI_KEEPALIVE_INTERVAL_MS\", 500);"
+        print "const exitKeepAliveAfter = envInt(\"XIAOAI_EXIT_KEEPALIVE_AFTER\", 300);"
+        print "const checkTTSStatusAfter = envInt(\"XIAOAI_CHECK_TTS_STATUS_AFTER\", 1);"
+        inserted_tuning_consts = 1
+        next
+      }
       if (!inserted_mode && has_call_helper == 1 && $0 ~ /^function hasCallAIKeyword\(text\)/) {
         print "const noflashMode = globalThis.__xiaoai_noflash_mode || {"
         print "  mode: normalizeCommand(process.env.XIAOAI_DEFAULT_MODE || \"native\") === \"ai\" ? \"ai\" : \"native\","
@@ -674,6 +708,14 @@ patch_config_for_flash_like_mode_state() {
       if ($0 ~ /^  exitKeywords,$/ || $0 ~ /^  exitKeywords: /) {
         print "  exitKeywords: modeKeywords(exitKeywords, \"native\"),"
         next
+      }
+      if (!inserted_tuning_fields && $0 ~ /^  streamResponse,/) {
+        print "  heartbeat: heartbeatMs,"
+        print "  checkInterval: keepAliveIntervalMs,"
+        print "  exitKeepAliveAfter,"
+        print "  checkTTSStatusAfter,"
+        print "  audioSilent: env.XIAOAI_AUDIO_SILENT || env.AUDIO_SILENT || undefined,"
+        inserted_tuning_fields = 1
       }
       print
       if (in_command_action && $0 ~ /^}/) {
