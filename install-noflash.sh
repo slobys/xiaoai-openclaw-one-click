@@ -62,7 +62,7 @@ function compact(text) {
 function norm(text) {
   return compact(text).normalize("NFKC").replace(/\s+/g, "").replace(/[，。！？；：、,.!?;:~`"'“”‘’（）()【】[\]{}<>《》]/g, "").toLowerCase();
 }
-const noflashMode = globalThis.__xiaoai_noflash_mode || { mode: norm(env.XIAOAI_DEFAULT_MODE || "ai") === "native" ? "native" : "ai" };
+const noflashMode = globalThis.__xiaoai_noflash_mode || { mode: norm(env.XIAOAI_DEFAULT_MODE || "native") === "ai" ? "ai" : "native" };
 globalThis.__xiaoai_noflash_mode = noflashMode;
 function list(value, fallback) {
   return `${value || ""},${fallback.join(",")}`.split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean);
@@ -137,8 +137,8 @@ async function callLLM(name, text, testing = false) {
 }
 function action(text) {
   const c = norm(text);
-  if (["开启ai", "打开ai", "切换ai", "ai模式", "开启小爱"].includes(c)) return { type: "ai-mode" };
-  if (["关闭ai", "退出ai", "关闭小爱", "原生小爱", "原生模式", "切换小爱"].includes(c)) return { type: "native-mode" };
+  if (["开启ai", "打开ai", "切换ai", "ai模式"].includes(c)) return { type: "ai-mode" };
+  if (["开启小爱", "切换小爱", "原生模式", "原生小爱", "关闭ai", "退出ai", "关闭小爱"].includes(c)) return { type: "native-mode" };
   if (["当前模型", "查看模型", "当前模式"].includes(c)) return { type: "current" };
   if (["清空上下文", "清除上下文", "清空对话"].includes(c)) return { type: "clear" };
   if (["测试模型", "测试当前模型"].includes(c)) return { type: "test" };
@@ -161,6 +161,7 @@ const commands = {
     }
     if (a.type === "ai-mode") { noflashMode.mode = "ai"; state.messages = []; return { text: "已切换到AI模式。" }; }
     if (a.type === "native-mode") { noflashMode.mode = "native"; state.messages = []; return { text: "已切换到原生小爱模式。" }; }
+    if (["switch", "test"].includes(a.type) && noflashMode.mode !== "ai") return { text: "请先说：开启AI。" };
     if (a.type === "current") return { text: `当前模型是 ${providerName(state.provider)}，模型名 ${providers[state.provider]?.model || ""}。` };
     if (a.type === "clear") { state.messages = []; return { text: "已清空上下文。" }; }
     if (a.type === "switch") { if (!a.provider) return { text: "没听清要切换到哪个模型。" }; state.provider = a.provider; state.messages = []; return { text: `已切换到 ${providerName(a.provider)}。` }; }
@@ -390,11 +391,11 @@ normalize_env_file() {
 
   {
     printf '\n%s\n' '# ===== 语音触发 ====='
-    printf '%s\n' '# XIAOAI_DEFAULT_MODE：默认 ai 时更接近刷机版，普通问题优先交给 AI；说“关闭AI/原生小爱”可切回原生。'
-    printf '%s\n' '# 问AI/问小爱：即使当前是原生模式，也可单次交给 AI。'
-    printf '%s\n' '# 开启AI/开启小爱：切回 AI；关闭AI/原生小爱：切回原生小爱。'
+    printf '%s\n' '# XIAOAI_DEFAULT_MODE：默认 native，普通问题交给原生小爱；说“开启AI”后进入 AI 模式。'
+    printf '%s\n' '# 问AI/问小爱：原生模式下单次交给 AI。'
+    printf '%s\n' '# 开启AI：进入 AI；开启小爱/关闭AI/原生小爱：回到原生小爱。'
   } >> "$tmp"
-  append_env_line "XIAOAI_DEFAULT_MODE" "ai" "$tmp"
+  append_env_value "XIAOAI_DEFAULT_MODE" "native" "$tmp"
   append_env_line "XIAOAI_CALL_KEYWORD" "问AI" "$tmp"
   append_env_line "XIAOAI_WAKE_KEYWORD" "开启AI" "$tmp"
   append_env_line "XIAOAI_EXIT_KEYWORD" "关闭AI" "$tmp"
@@ -526,7 +527,7 @@ patch_config_for_custom_qa_command() {
     {
       if ($0 ~ /^export default \{/) {
         print "const noflashMode = globalThis.__xiaoai_noflash_mode || {"
-        print "  mode: normalizeCommand(process.env.XIAOAI_DEFAULT_MODE || \"ai\") === \"native\" ? \"native\" : \"ai\","
+        print "  mode: normalizeCommand(process.env.XIAOAI_DEFAULT_MODE || \"native\") === \"ai\" ? \"ai\" : \"native\","
         print "};"
         print "globalThis.__xiaoai_noflash_mode = noflashMode;"
         print ""
@@ -566,9 +567,9 @@ patch_config_for_custom_qa_command() {
   log "已给 $CONFIG_FILE 补充连续对话自定义问答逻辑"
 }
 
-patch_config_for_noflash_default_ai_mode() {
+patch_config_for_flash_like_mode_state() {
   [ -f "$CONFIG_FILE" ] || return 0
-  if grep -q "noflashMode" "$CONFIG_FILE" && grep -q "noflashMode.mode === \"ai\"" "$CONFIG_FILE" && grep -q "ai-mode" "$CONFIG_FILE" && grep -q "wakeUpKeywords: \\[\\]" "$CONFIG_FILE"; then
+  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "wakeUpKeywords: \\[\\]" "$CONFIG_FILE"; then
     return 0
   fi
   grep -q "function stripCallKeyword" "$CONFIG_FILE" || return 0
@@ -577,13 +578,18 @@ patch_config_for_noflash_default_ai_mode() {
   else
     has_call_helper=0
   fi
+  if grep -q "noflashMode" "$CONFIG_FILE"; then
+    has_noflash_mode=1
+  else
+    has_noflash_mode=0
+  fi
   tmp="$CONFIG_FILE.tmp.$$"
-  awk -v has_call_helper="$has_call_helper" '
-    BEGIN { inserted_mode = 0; inserted_actions = 0; inserted_run = 0; in_command_action = 0 }
+  awk -v has_call_helper="$has_call_helper" -v has_noflash_mode="$has_noflash_mode" '
+    BEGIN { inserted_mode = has_noflash_mode; inserted_actions = 0; inserted_run = 0; in_command_action = 0 }
     {
       if (!inserted_mode && has_call_helper == 1 && $0 ~ /^function hasCallAIKeyword\(text\)/) {
         print "const noflashMode = globalThis.__xiaoai_noflash_mode || {"
-        print "  mode: normalizeCommand(process.env.XIAOAI_DEFAULT_MODE || \"ai\") === \"native\" ? \"native\" : \"ai\","
+        print "  mode: normalizeCommand(process.env.XIAOAI_DEFAULT_MODE || \"native\") === \"ai\" ? \"ai\" : \"native\","
         print "};"
         print "globalThis.__xiaoai_noflash_mode = noflashMode;"
         print ""
@@ -591,7 +597,7 @@ patch_config_for_noflash_default_ai_mode() {
       }
       if (!inserted_mode && has_call_helper == 0 && $0 ~ /^function stripCallKeyword\(text\)/) {
         print "const noflashMode = globalThis.__xiaoai_noflash_mode || {"
-        print "  mode: normalizeCommand(process.env.XIAOAI_DEFAULT_MODE || \"ai\") === \"native\" ? \"native\" : \"ai\","
+        print "  mode: normalizeCommand(process.env.XIAOAI_DEFAULT_MODE || \"native\") === \"ai\" ? \"ai\" : \"native\","
         print "};"
         print "globalThis.__xiaoai_noflash_mode = noflashMode;"
         print ""
@@ -607,8 +613,8 @@ patch_config_for_noflash_default_ai_mode() {
       }
       if (in_command_action && !inserted_actions && $0 ~ /^  const cmd = normalizeCommand\(text\);$/) {
         print
-        print "  if ([\"开启ai\", \"打开ai\", \"切换ai\", \"ai模式\", \"开启小爱\"].includes(cmd)) return { type: \"ai-mode\" };"
-        print "  if ([\"关闭ai\", \"退出ai\", \"关闭小爱\", \"原生小爱\", \"原生模式\", \"切换小爱\"].includes(cmd)) return { type: \"native-mode\" };"
+        print "  if ([\"开启ai\", \"打开ai\", \"切换ai\", \"ai模式\"].includes(cmd)) return { type: \"ai-mode\" };"
+        print "  if ([\"开启小爱\", \"切换小爱\", \"原生模式\", \"原生小爱\", \"关闭ai\", \"退出ai\", \"关闭小爱\"].includes(cmd)) return { type: \"native-mode\" };"
         inserted_actions = 1
         next
       }
@@ -623,6 +629,9 @@ patch_config_for_noflash_default_ai_mode() {
         print "      noflashMode.mode = \"native\";"
         print "      llmState.messages = [];"
         print "      return { text: \"已切换到原生小爱模式。\" };"
+        print "    }"
+        print "    if ([\"switch\", \"test\"].includes(action.type) && noflashMode.mode !== \"ai\") {"
+        print "      return { text: \"请先说：开启AI。\" };"
         print "    }"
         inserted_run = 1
         next
@@ -646,8 +655,16 @@ patch_config_for_noflash_default_ai_mode() {
     }
   ' "$CONFIG_FILE" > "$tmp"
   mv "$tmp" "$CONFIG_FILE"
+  tmp="$CONFIG_FILE.tmp.$$"
+  sed \
+    -e 's/process\.env\.XIAOAI_DEFAULT_MODE || "ai"/process.env.XIAOAI_DEFAULT_MODE || "native"/g' \
+    -e 's/env\.XIAOAI_DEFAULT_MODE || "ai"/env.XIAOAI_DEFAULT_MODE || "native"/g' \
+    -e 's/\["开启ai", "打开ai", "切换ai", "ai模式", "开启小爱"\]/["开启ai", "打开ai", "切换ai", "ai模式"]/g' \
+    -e 's/\["关闭ai", "退出ai", "关闭小爱", "原生小爱", "原生模式", "切换小爱"\]/["开启小爱", "切换小爱", "原生模式", "原生小爱", "关闭ai", "退出ai", "关闭小爱"]/g' \
+    "$CONFIG_FILE" > "$tmp"
+  mv "$tmp" "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE"
-  log "已给 $CONFIG_FILE 启用免刷机默认 AI 模式，体验更接近刷机版"
+  log "已给 $CONFIG_FILE 启用免刷机刷机版同款模式状态机"
 }
 
 set_env() {
@@ -790,7 +807,7 @@ prepare_files() {
   fi
   patch_config_for_migpt_openai_env
   patch_config_for_custom_qa_command
-  patch_config_for_noflash_default_ai_mode
+  patch_config_for_flash_like_mode_state
   ln -sf "$(basename "$CONFIG_FILE")" "$WORK_DIR/.migpt.js" 2>/dev/null || true
   ln -sf "$(basename "$ENV_FILE")" "$LEGACY_ENV_FILE" 2>/dev/null || true
   [ -s "$WORK_DIR/.mi.json" ] || printf '{}\n' > "$WORK_DIR/.mi.json"
@@ -805,6 +822,7 @@ configure() {
   ask_secret "MI_PASS_TOKEN" "小米 passToken Cookie（可选，建议从已登录浏览器复制）"
   ask "MI_DID" "米家中的音箱名称或 DID"
   ask "XIAOAI_HARDWARE" "音箱型号代码（例如 LX06、L05B、OH2P）"
+  set_env "XIAOAI_DEFAULT_MODE" "native"
   set_env "XIAOAI_STREAM_RESPONSE" "true"
   log "基础配置已保存到 $ENV_FILE"
   log "模型配置继续使用 $ENV_FILE 和 $CONFIG_FILE，按旧教程添加 API Key 后运行菜单 3 重建服务。"

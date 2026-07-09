@@ -198,7 +198,7 @@ globalThis.__xiaoai_llm_state = llmState;
 applyProviderToMiGPTEnv(llmState.provider);
 
 const noflashMode = globalThis.__xiaoai_noflash_mode || {
-  mode: normalizeCommand(env.XIAOAI_DEFAULT_MODE || "ai") === "native" ? "native" : "ai",
+  mode: normalizeCommand(env.XIAOAI_DEFAULT_MODE || "native") === "ai" ? "ai" : "native",
 };
 globalThis.__xiaoai_noflash_mode = noflashMode;
 
@@ -393,8 +393,10 @@ function switchProvider(provider) {
 
 function commandAction(text) {
   const cmd = normalizeCommand(text);
-  if (["开启ai", "打开ai", "切换ai", "ai模式", "开启小爱"].includes(cmd)) return { type: "ai-mode" };
-  if (["关闭ai", "退出ai", "关闭小爱", "原生小爱", "原生模式", "切换小爱"].includes(cmd)) return { type: "native-mode" };
+  if (["开启ai", "打开ai", "切换ai", "ai模式"].includes(cmd)) return { type: "ai-mode" };
+  if (["开启小爱", "切换小爱", "原生模式", "原生小爱", "关闭ai", "退出ai", "关闭小爱"].includes(cmd)) {
+    return { type: "native-mode" };
+  }
   if (["查看模型", "当前模型", "当前模式"].includes(cmd)) return { type: "current" };
   if (["清空上下文", "清除上下文", "清空对话"].includes(cmd)) return { type: "clear" };
   if (["测试模型", "测试当前模型"].includes(cmd)) return { type: "test" };
@@ -418,6 +420,9 @@ const providerCommands = {
       noflashMode.mode = "native";
       llmState.messages = [];
       return { text: "已切换到原生小爱模式。" };
+    }
+    if (["switch", "test"].includes(action.type) && noflashMode.mode !== "ai") {
+      return { text: "请先说：开启AI。" };
     }
     if (action.type === "current") {
       const provider = currentProvider();
