@@ -31,7 +31,7 @@ XIAOAI_CHECK_TTS_STATUS_AFTER=1
 XIAOAI_AUDIO_SILENT=
 # XIAOAI_DISABLE_DEFAULT_SILENT：true 表示不用内置静音 mp3，回退 MiGPT 默认静音方式。
 XIAOAI_DISABLE_DEFAULT_SILENT=false
-# 默认关闭进入/退出 AI 的提示音，让“开启AI”后更快进入静音保活；需要提示可自行填写。
+# 进入/退出 AI 默认只回一个“好”，用于确认切换成功；填 none 可关闭提示。
 XIAOAI_ENTER_AI_PROMPT=
 XIAOAI_EXIT_AI_PROMPT=
 XIAOAI_DEBUG=false

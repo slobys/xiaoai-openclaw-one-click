@@ -110,6 +110,12 @@ function keywords(value, defaults) {
   return [...new Set(items)];
 }
 
+function promptList(value, defaults) {
+  const raw = String(value || "").trim();
+  if (/^(none|off|false|0|关闭|无)$/i.test(raw)) return [];
+  return raw ? keywords(value, []) : defaults;
+}
+
 function normalizeCommand(raw) {
   return String(raw || "")
     .normalize("NFKC")
@@ -131,7 +137,7 @@ const callAIKeywords = keywords(env.XIAOAI_CALL_KEYWORD, [
   "文AI",
   "文 ai",
 ]);
-const wakeUpKeywords = keywords(env.XIAOAI_WAKE_KEYWORD, ["打开AI", "开启AI"]);
+const wakeUpKeywords = keywords(env.XIAOAI_WAKE_KEYWORD, ["打开AI", "开启AI", "切换AI", "AI模式"]);
 const exitKeywords = keywords(env.XIAOAI_EXIT_KEYWORD, [
   "关闭AI",
   "退出AI",
@@ -141,8 +147,8 @@ const exitKeywords = keywords(env.XIAOAI_EXIT_KEYWORD, [
   "原生模式",
   "原生小爱",
 ]);
-const enterAIPrompts = keywords(env.XIAOAI_ENTER_AI_PROMPT, []);
-const exitAIPrompts = keywords(env.XIAOAI_EXIT_AI_PROMPT, []);
+const enterAIPrompts = promptList(env.XIAOAI_ENTER_AI_PROMPT, ["好"]);
+const exitAIPrompts = promptList(env.XIAOAI_EXIT_AI_PROMPT, ["好"]);
 
 const systemPrompt = choose(CONFIG.systemPrompt, env.XIAOAI_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT);
 const conversationTurns = envInt("CONVERSATION_TURNS", 6);

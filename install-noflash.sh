@@ -73,6 +73,11 @@ globalThis.__xiaoai_noflash_mode = noflashMode;
 function list(value, fallback) {
   return `${value || ""},${fallback.join(",")}`.split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean);
 }
+function promptList(value, fallback) {
+  const raw = String(value || "").trim();
+  if (/^(none|off|false|0|关闭|无)$/i.test(raw)) return [];
+  return raw ? list(value, []) : fallback;
+}
 function modeKeywords(items, mode) {
   const arr = [...items];
   arr.some = function someWithMode(callback, thisArg) {
@@ -82,8 +87,8 @@ function modeKeywords(items, mode) {
   };
   return arr;
 }
-const enterAIPrompts = list(env.XIAOAI_ENTER_AI_PROMPT, []);
-const exitAIPrompts = list(env.XIAOAI_EXIT_AI_PROMPT, []);
+const enterAIPrompts = promptList(env.XIAOAI_ENTER_AI_PROMPT, ["好"]);
+const exitAIPrompts = promptList(env.XIAOAI_EXIT_AI_PROMPT, ["好"]);
 const providers = {
   deepseek: { label: "deepseek", baseURL: env.DEEPSEEK_BASE_URL || "https://api.deepseek.com", apiKey: env.DEEPSEEK_API_KEY || "", model: env.DEEPSEEK_MODEL || "deepseek-v4-flash", kind: "openai" },
   openai: { label: "openai", baseURL: env.OPENAI_BASE_URL || "https://api.openai.com/v1", apiKey: env.OPENAI_API_KEY || "", model: env.OPENAI_MODEL || "gpt-4o-mini", kind: "openai" },
@@ -191,7 +196,7 @@ const commands = {
 };
 const speakerConfig = {
   callAIKeywords: list(env.XIAOAI_CALL_KEYWORD, ["问AI", "问 ai", "问小爱", "揾AI", "文AI"]),
-  wakeUpKeywords: modeKeywords(list(env.XIAOAI_WAKE_KEYWORD, ["打开AI", "开启AI"]), "ai"),
+  wakeUpKeywords: modeKeywords(list(env.XIAOAI_WAKE_KEYWORD, ["打开AI", "开启AI", "切换AI", "AI模式"]), "ai"),
   exitKeywords: modeKeywords(list(env.XIAOAI_EXIT_KEYWORD, ["关闭AI", "退出AI", "关闭小爱", "开启小爱", "切换小爱", "原生模式", "原生小爱"]), "native"),
   onEnterAI: enterAIPrompts,
   onExitAI: exitAIPrompts,
@@ -609,7 +614,7 @@ patch_config_for_custom_qa_command() {
 
 patch_config_for_flash_like_mode_state() {
   [ -f "$CONFIG_FILE" ] || return 0
-  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "modeKeywords(wakeUpKeywords, \"ai\")" "$CONFIG_FILE" && grep -q "heartbeat: heartbeatMs" "$CONFIG_FILE" && grep -q "defaultAudioSilentUrl" "$CONFIG_FILE"; then
+  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "modeKeywords(wakeUpKeywords, \"ai\")" "$CONFIG_FILE" && grep -q "heartbeat: heartbeatMs" "$CONFIG_FILE" && grep -q "defaultAudioSilentUrl" "$CONFIG_FILE" && grep -q "function promptList" "$CONFIG_FILE" && grep -q '"切换AI", "AI模式"' "$CONFIG_FILE"; then
     return 0
   fi
   grep -q "function stripCallKeyword" "$CONFIG_FILE" || return 0
@@ -740,14 +745,37 @@ patch_config_for_flash_like_mode_state() {
     -e 's/process\.env\.XIAOAI_DEFAULT_MODE || "ai"/process.env.XIAOAI_DEFAULT_MODE || "native"/g' \
     -e 's/env\.XIAOAI_DEFAULT_MODE || "ai"/env.XIAOAI_DEFAULT_MODE || "native"/g' \
     -e 's/\["打开AI", "开启AI", "开启小爱"\]/["打开AI", "开启AI"]/g' \
+    -e 's/\["打开AI", "开启AI"\]/["打开AI", "开启AI", "切换AI", "AI模式"]/g' \
     -e 's/\["关闭AI", "退出AI", "关闭小爱"\]/["关闭AI", "退出AI", "关闭小爱", "开启小爱", "切换小爱", "原生模式", "原生小爱"]/g' \
     -e 's/\["开启ai", "打开ai", "切换ai", "ai模式", "开启小爱"\]/["开启ai", "打开ai", "切换ai", "ai模式"]/g' \
     -e 's/\["关闭ai", "退出ai", "关闭小爱", "原生小爱", "原生模式", "切换小爱"\]/["开启小爱", "切换小爱", "原生模式", "原生小爱", "关闭ai", "退出ai", "关闭小爱"]/g' \
-    -e 's/  onEnterAI: \["AI模式已开启"\],/  onEnterAI: [],/g' \
-    -e 's/  onExitAI: \["AI模式已关闭"\],/  onExitAI: [],/g' \
+    -e 's/  onEnterAI: \["AI模式已开启"\],/  onEnterAI: ["好"],/g' \
+    -e 's/  onExitAI: \["AI模式已关闭"\],/  onExitAI: ["好"],/g' \
+    -e 's/const enterAIPrompts = keywords(env\.XIAOAI_ENTER_AI_PROMPT, \[\]);/const enterAIPrompts = promptList(env.XIAOAI_ENTER_AI_PROMPT, ["好"]);/g' \
+    -e 's/const exitAIPrompts = keywords(env\.XIAOAI_EXIT_AI_PROMPT, \[\]);/const exitAIPrompts = promptList(env.XIAOAI_EXIT_AI_PROMPT, ["好"]);/g' \
     -e 's/  audioSilent: env\.XIAOAI_AUDIO_SILENT || env\.AUDIO_SILENT || undefined,/  audioSilent,/g' \
     "$CONFIG_FILE" > "$tmp"
   mv "$tmp" "$CONFIG_FILE"
+  if ! grep -q "function promptList" "$CONFIG_FILE"; then
+    tmp="$CONFIG_FILE.tmp.$$"
+    awk '
+      {
+        print
+        if ($0 ~ /^function keywords\(value, defaults\)/) {
+          in_keywords = 1
+        } else if (in_keywords && $0 ~ /^}$/) {
+          print ""
+          print "function promptList(value, defaults) {"
+          print "  const raw = String(value || \"\").trim();"
+          print "  if (/^(none|off|false|0|关闭|无)$/i.test(raw)) return [];"
+          print "  return raw ? keywords(value, []) : defaults;"
+          print "}"
+          in_keywords = 0
+        }
+      }
+    ' "$CONFIG_FILE" > "$tmp"
+    mv "$tmp" "$CONFIG_FILE"
+  fi
   if ! grep -q "defaultAudioSilentUrl" "$CONFIG_FILE"; then
     tmp="$CONFIG_FILE.tmp.$$"
     awk '
