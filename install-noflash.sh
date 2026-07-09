@@ -75,7 +75,7 @@ function list(value, fallback) {
 }
 function promptList(value, fallback) {
   const raw = String(value || "").trim();
-  if (/^(none|off|false|0|关闭|无)$/i.test(raw)) return [];
+  if (/^(none|off|false|0|关闭|无)$/i.test(raw)) return fallback;
   return raw ? list(value, []) : fallback;
 }
 function modeKeywords(items, mode) {
@@ -87,8 +87,9 @@ function modeKeywords(items, mode) {
   };
   return arr;
 }
-const enterAIPrompts = promptList(env.XIAOAI_ENTER_AI_PROMPT, ["已切换AI模式"]);
-const exitAIPrompts = promptList(env.XIAOAI_EXIT_AI_PROMPT, ["已切换小爱模式"]);
+const modeConfirmDisabled = env.XIAOAI_DISABLE_MODE_CONFIRM === "true";
+const enterAIPrompts = modeConfirmDisabled ? [] : promptList(env.XIAOAI_ENTER_AI_PROMPT, ["已切换AI模式"]);
+const exitAIPrompts = modeConfirmDisabled ? [] : promptList(env.XIAOAI_EXIT_AI_PROMPT, ["已切换小爱模式"]);
 const providers = {
   deepseek: { label: "deepseek", baseURL: env.DEEPSEEK_BASE_URL || "https://api.deepseek.com", apiKey: env.DEEPSEEK_API_KEY || "", model: env.DEEPSEEK_MODEL || "deepseek-v4-flash", kind: "openai" },
   openai: { label: "openai", baseURL: env.OPENAI_BASE_URL || "https://api.openai.com/v1", apiKey: env.OPENAI_API_KEY || "", model: env.OPENAI_MODEL || "gpt-4o-mini", kind: "openai" },
@@ -308,7 +309,7 @@ is_known_env_key() {
   case "$1" in
     MI_USER|MI_PASS|MI_PASS_TOKEN|MI_DID|MI_DEVICE_ID|XIAOAI_HARDWARE|\
     XIAOAI_DEFAULT_MODE|XIAOAI_CALL_KEYWORD|XIAOAI_WAKE_KEYWORD|XIAOAI_EXIT_KEYWORD|XIAOAI_STREAM_RESPONSE|XIAOAI_DEBUG|XIAOAI_SYSTEM_PROMPT|\
-    XIAOAI_HEARTBEAT_MS|XIAOAI_KEEPALIVE_INTERVAL_MS|XIAOAI_EXIT_KEEPALIVE_AFTER|XIAOAI_CHECK_TTS_STATUS_AFTER|XIAOAI_AUDIO_SILENT|AUDIO_SILENT|XIAOAI_DISABLE_DEFAULT_SILENT|XIAOAI_ENTER_AI_PROMPT|XIAOAI_EXIT_AI_PROMPT|\
+    XIAOAI_HEARTBEAT_MS|XIAOAI_KEEPALIVE_INTERVAL_MS|XIAOAI_EXIT_KEEPALIVE_AFTER|XIAOAI_CHECK_TTS_STATUS_AFTER|XIAOAI_AUDIO_SILENT|AUDIO_SILENT|XIAOAI_DISABLE_DEFAULT_SILENT|XIAOAI_ENTER_AI_PROMPT|XIAOAI_EXIT_AI_PROMPT|XIAOAI_DISABLE_MODE_CONFIRM|\
     XIAOAI_DEFAULT_PROVIDER|CONVERSATION_TURNS|LLM_TIMEOUT_MS|TEST_TIMEOUT_MS|\
     XIAOAI_DOCKER_DNS|XIAOAI_DOCKER_NETWORK_MODE|\
     SPEAK_CHUNK_LEN|SPEAK_MS_PER_CHAR|SPEAK_CHUNK_GAP_MS|\
@@ -433,6 +434,7 @@ normalize_env_file() {
   append_env_line "XIAOAI_EXIT_KEEPALIVE_AFTER" "300" "$tmp"
   append_env_line "XIAOAI_CHECK_TTS_STATUS_AFTER" "1" "$tmp"
   append_env_line "XIAOAI_DISABLE_DEFAULT_SILENT" "false" "$tmp"
+  append_env_line "XIAOAI_DISABLE_MODE_CONFIRM" "false" "$tmp"
   if [ -n "$(env_value "XIAOAI_ENTER_AI_PROMPT")" ]; then
     append_env_line "XIAOAI_ENTER_AI_PROMPT" "" "$tmp"
   fi
@@ -614,7 +616,7 @@ patch_config_for_custom_qa_command() {
 
 patch_config_for_flash_like_mode_state() {
   [ -f "$CONFIG_FILE" ] || return 0
-  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "modeKeywords(wakeUpKeywords, \"ai\")" "$CONFIG_FILE" && grep -q "heartbeat: heartbeatMs" "$CONFIG_FILE" && grep -q "defaultAudioSilentUrl" "$CONFIG_FILE" && grep -q "function promptList" "$CONFIG_FILE" && grep -q '"切换AI", "AI模式"' "$CONFIG_FILE" && grep -q "已切换AI模式" "$CONFIG_FILE" && grep -q "已切换小爱模式" "$CONFIG_FILE"; then
+  if grep -q "XIAOAI_DEFAULT_MODE || \"native\"" "$CONFIG_FILE" && grep -q "请先说：开启AI" "$CONFIG_FILE" && grep -q "modeKeywords(wakeUpKeywords, \"ai\")" "$CONFIG_FILE" && grep -q "heartbeat: heartbeatMs" "$CONFIG_FILE" && grep -q "defaultAudioSilentUrl" "$CONFIG_FILE" && grep -q "function promptList" "$CONFIG_FILE" && grep -q '"切换AI", "AI模式"' "$CONFIG_FILE" && grep -q "已切换AI模式" "$CONFIG_FILE" && grep -q "已切换小爱模式" "$CONFIG_FILE" && grep -q "XIAOAI_DISABLE_MODE_CONFIRM" "$CONFIG_FILE"; then
     return 0
   fi
   grep -q "function stripCallKeyword" "$CONFIG_FILE" || return 0
@@ -760,6 +762,36 @@ patch_config_for_flash_like_mode_state() {
     -e 's/  audioSilent: env\.XIAOAI_AUDIO_SILENT || env\.AUDIO_SILENT || undefined,/  audioSilent,/g' \
     "$CONFIG_FILE" > "$tmp"
   mv "$tmp" "$CONFIG_FILE"
+  if grep -q "function promptList" "$CONFIG_FILE" && grep -q 'return \[\];' "$CONFIG_FILE"; then
+    tmp="$CONFIG_FILE.tmp.$$"
+    awk '
+      /^function promptList\(value, fallback\)/ { in_prompt = 1; fallback_name = "fallback"; print; next }
+      /^function promptList\(value, defaults\)/ { in_prompt = 1; fallback_name = "defaults"; print; next }
+      in_prompt && /if \(\/.*none.*off.*false.*关闭.*无.*\/i\.test\(raw\)\) return \[\];/ {
+        print "  if (/^(none|off|false|0|关闭|无)$/i.test(raw)) return " fallback_name ";"
+        next
+      }
+      in_prompt && /^}/ { in_prompt = 0; fallback_name = ""; print; next }
+      { print }
+    ' "$CONFIG_FILE" > "$tmp"
+    mv "$tmp" "$CONFIG_FILE"
+  fi
+  if ! grep -q "modeConfirmDisabled" "$CONFIG_FILE"; then
+    tmp="$CONFIG_FILE.tmp.$$"
+    awk '
+      /^const enterAIPrompts = promptList\(env\.XIAOAI_ENTER_AI_PROMPT, \["已切换AI模式"\]\);$/ {
+        print "const modeConfirmDisabled = env.XIAOAI_DISABLE_MODE_CONFIRM === \"true\";"
+        print "const enterAIPrompts = modeConfirmDisabled ? [] : promptList(env.XIAOAI_ENTER_AI_PROMPT, [\"已切换AI模式\"]);"
+        next
+      }
+      /^const exitAIPrompts = promptList\(env\.XIAOAI_EXIT_AI_PROMPT, \["已切换小爱模式"\]\);$/ {
+        print "const exitAIPrompts = modeConfirmDisabled ? [] : promptList(env.XIAOAI_EXIT_AI_PROMPT, [\"已切换小爱模式\"]);"
+        next
+      }
+      { print }
+    ' "$CONFIG_FILE" > "$tmp"
+    mv "$tmp" "$CONFIG_FILE"
+  fi
   if ! grep -q "function promptList" "$CONFIG_FILE"; then
     tmp="$CONFIG_FILE.tmp.$$"
     awk '
@@ -771,7 +803,7 @@ patch_config_for_flash_like_mode_state() {
           print ""
           print "function promptList(value, defaults) {"
           print "  const raw = String(value || \"\").trim();"
-          print "  if (/^(none|off|false|0|关闭|无)$/i.test(raw)) return [];"
+          print "  if (/^(none|off|false|0|关闭|无)$/i.test(raw)) return defaults;"
           print "  return raw ? keywords(value, []) : defaults;"
           print "}"
           in_keywords = 0

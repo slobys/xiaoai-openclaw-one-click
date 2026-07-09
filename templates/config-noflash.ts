@@ -112,7 +112,7 @@ function keywords(value, defaults) {
 
 function promptList(value, defaults) {
   const raw = String(value || "").trim();
-  if (/^(none|off|false|0|关闭|无)$/i.test(raw)) return [];
+  if (/^(none|off|false|0|关闭|无)$/i.test(raw)) return defaults;
   return raw ? keywords(value, []) : defaults;
 }
 
@@ -147,8 +147,9 @@ const exitKeywords = keywords(env.XIAOAI_EXIT_KEYWORD, [
   "原生模式",
   "原生小爱",
 ]);
-const enterAIPrompts = promptList(env.XIAOAI_ENTER_AI_PROMPT, ["已切换AI模式"]);
-const exitAIPrompts = promptList(env.XIAOAI_EXIT_AI_PROMPT, ["已切换小爱模式"]);
+const modeConfirmDisabled = env.XIAOAI_DISABLE_MODE_CONFIRM === "true";
+const enterAIPrompts = modeConfirmDisabled ? [] : promptList(env.XIAOAI_ENTER_AI_PROMPT, ["已切换AI模式"]);
+const exitAIPrompts = modeConfirmDisabled ? [] : promptList(env.XIAOAI_EXIT_AI_PROMPT, ["已切换小爱模式"]);
 
 const systemPrompt = choose(CONFIG.systemPrompt, env.XIAOAI_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT);
 const conversationTurns = envInt("CONVERSATION_TURNS", 6);
