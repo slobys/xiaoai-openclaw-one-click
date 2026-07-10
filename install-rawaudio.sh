@@ -294,7 +294,7 @@ build_docker_dns_args() {
     return 0
   fi
   dns_list="${XIAOAI_DOCKER_DNS:-}"
-  [ -z "$dns_list" ] && [ -f "$WORK_DIR/.env" ] && dns_list=$(awk -F= '$1=="XIAOAI_DOCKER_DNS" { print $2; exit }' "$WORK_DIR/.env")
+  [ -z "$dns_list" ] && dns_list=$(read_env_value XIAOAI_DOCKER_DNS || true)
   if [ -z "$dns_list" ] && { command -v apk >/dev/null 2>&1 || command -v opkg >/dev/null 2>&1; }; then
     dns_list="223.5.5.5,119.29.29.29"
     log "检测到 OpenWrt 且未配置 XIAOAI_DOCKER_DNS，默认使用容器 DNS: $dns_list"
@@ -312,7 +312,29 @@ build_docker_dns_args() {
 read_env_value() {
   key="$1"
   [ -f "$WORK_DIR/.env" ] || return 0
-  awk -F= -v key="$key" '$1==key { print $2; exit }' "$WORK_DIR/.env"
+  awk -v key="$key" '
+    {
+      line = $0
+      sub(/\r$/, "", line)
+      sub(/^[[:space:]]*export[[:space:]]+/, "", line)
+      split(line, parts, "=")
+      name = parts[1]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
+      if (name == key) {
+        value = line
+        sub(/^[^=]*=/, "", value)
+        sub(/[[:space:]]+#.*$/, "", value)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+        gsub(/^["'\''"]|["'\''"]$/, "", value)
+        found = value
+      }
+    }
+    END {
+      if (found != "") {
+        print found
+      }
+    }
+  ' "$WORK_DIR/.env"
 }
 
 is_openwrt_host() {
@@ -445,6 +467,10 @@ ask_client_inputs() {
 }
 
 install_client() {
+  load_network_mode
+  if [ "$DOCKER_NETWORK_MODE" = "host" ]; then
+    PORT="$APP_PORT"
+  fi
   ask_client_inputs
   ensure_speaker_ssh_client
   ws_url="ws://${SERVER_IP}:${PORT}"
