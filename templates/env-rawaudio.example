@@ -59,5 +59,10 @@ DOUBAO_TTS_FORMAT=pcm
 DOUBAO_TTS_STREAM=true
 
 # Docker
+# 网络模式：bridge 使用端口映射 4499:4399；host 可绕过 OpenWrt Docker bridge DNS/NAT 问题，
+# 但 WebSocket 会直接占用宿主机 4399，不能和普通刷机版服务同时占用同一端口。
+XIAOAI_DOCKER_NETWORK_MODE=bridge
+
 # OpenWrt Docker 容器解析 api.deepseek.com 失败时使用；留空时安装脚本会在 OpenWrt 上自动使用下面两个 DNS。
+# host 网络模式通常不需要这个配置。
 XIAOAI_DOCKER_DNS=223.5.5.5,119.29.29.29

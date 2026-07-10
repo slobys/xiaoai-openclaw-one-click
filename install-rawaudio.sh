@@ -7,6 +7,8 @@ WORK_DIR="/opt/${APP_NAME}"
 CONTAINER_NAME="${APP_NAME}"
 PORT="${XIAOAI_RAWAUDIO_PORT:-4499}"
 API_PORT="${XIAOAI_RAWAUDIO_API_PORT:-9093}"
+APP_PORT="4399"
+APP_API_PORT="9092"
 IMAGE="${XIAOAI_RAWAUDIO_IMAGE:-ghcr.io/coderzc/open-xiaoai-bridge:latest}"
 CONFIG_URL="${XIAOAI_RAWAUDIO_CONFIG_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main/templates/config-rawaudio.py}"
 CONFIG_CN_URL="${XIAOAI_RAWAUDIO_CONFIG_CN_URL:-https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main/templates/config-rawaudio.py}"
@@ -23,6 +25,9 @@ SPEAKER_IP="${SPEAKER_IP:-}"
 SERVER_IP="${SERVER_IP:-}"
 SKIP_MODELS="${XIAOAI_RAWAUDIO_SKIP_MODELS:-false}"
 DOCKER_DNS_ARGS=""
+DOCKER_NETWORK_MODE="${XIAOAI_DOCKER_NETWORK_MODE:-}"
+DOCKER_NETWORK_ARGS=""
+DOCKER_PORT_ARGS=""
 SPEAKER_SSH_BIN="${XIAOAI_SSH_BIN:-}"
 
 log() { printf '%s\n' "$*"; }
@@ -42,6 +47,7 @@ usage() {
 说明:
   Raw Audio 实验版使用独立目录 ${WORK_DIR} 和独立容器 ${CONTAINER_NAME}。
   默认 WebSocket 端口为 ${PORT}，避免和现有刷机版 4399 冲突。
+  如果 .env 设置 XIAOAI_DOCKER_NETWORK_MODE=host，WebSocket 会直接使用宿主机 4399。
 EOF
 }
 
@@ -283,6 +289,10 @@ install_docker_if_needed() {
 
 build_docker_dns_args() {
   DOCKER_DNS_ARGS=""
+  if [ "$DOCKER_NETWORK_MODE" = "host" ]; then
+    log "host 网络模式使用宿主机网络栈，跳过 Docker --dns 参数。"
+    return 0
+  fi
   dns_list="${XIAOAI_DOCKER_DNS:-}"
   [ -z "$dns_list" ] && [ -f "$WORK_DIR/.env" ] && dns_list=$(awk -F= '$1=="XIAOAI_DOCKER_DNS" { print $2; exit }' "$WORK_DIR/.env")
   if [ -z "$dns_list" ] && { command -v apk >/dev/null 2>&1 || command -v opkg >/dev/null 2>&1; }; then
@@ -297,6 +307,52 @@ build_docker_dns_args() {
     DOCKER_DNS_ARGS="${DOCKER_DNS_ARGS} --dns ${dns}"
   done
   IFS="$old_ifs"
+}
+
+read_env_value() {
+  key="$1"
+  [ -f "$WORK_DIR/.env" ] || return 0
+  awk -F= -v key="$key" '$1==key { print $2; exit }' "$WORK_DIR/.env"
+}
+
+is_openwrt_host() {
+  command -v apk >/dev/null 2>&1 || command -v opkg >/dev/null 2>&1
+}
+
+normalize_network_mode() {
+  mode="$1"
+  case "$(printf '%s' "$mode" | tr 'A-Z' 'a-z')" in
+    host) printf 'host\n' ;;
+    bridge|"") printf 'bridge\n' ;;
+    *) die "不支持的 XIAOAI_DOCKER_NETWORK_MODE: $mode，仅支持 bridge 或 host" ;;
+  esac
+}
+
+load_network_mode() {
+  if [ -z "$DOCKER_NETWORK_MODE" ]; then
+    DOCKER_NETWORK_MODE=$(read_env_value XIAOAI_DOCKER_NETWORK_MODE || true)
+  fi
+  if [ -z "$DOCKER_NETWORK_MODE" ] && is_openwrt_host; then
+    DOCKER_NETWORK_MODE="bridge"
+  fi
+  DOCKER_NETWORK_MODE=$(normalize_network_mode "$DOCKER_NETWORK_MODE")
+}
+
+build_docker_network_args() {
+  load_network_mode
+  DOCKER_NETWORK_ARGS=""
+  DOCKER_PORT_ARGS=""
+
+  if [ "$DOCKER_NETWORK_MODE" = "host" ]; then
+    DOCKER_NETWORK_ARGS="--network host"
+    PORT="$APP_PORT"
+    API_PORT=$(read_env_value API_SERVER_PORT || true)
+    API_PORT="${API_PORT:-${XIAOAI_RAWAUDIO_API_PORT:-9093}}"
+    log "使用 Docker host 网络模式；Raw Audio WebSocket 端口为 ${PORT}，HTTP API 端口为 ${API_PORT}。"
+    return 0
+  fi
+
+  DOCKER_PORT_ARGS="-p ${PORT}:${APP_PORT} -p ${API_PORT}:${APP_API_PORT}"
 }
 
 ensure_config() {
@@ -350,6 +406,7 @@ start_server() {
   install_docker_if_needed
   ensure_config
   ensure_models
+  build_docker_network_args
   build_docker_dns_args
 
   log "启动 Raw Audio 实验版容器..."
@@ -357,13 +414,14 @@ start_server() {
   docker run -d \
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
-    -p "${PORT}:4399" \
-    -p "${API_PORT}:9092" \
+    $DOCKER_NETWORK_ARGS \
+    $DOCKER_PORT_ARGS \
     $DOCKER_DNS_ARGS \
     --env-file "$WORK_DIR/.env" \
     -e OPENAI_ENABLE=1 \
     -e API_SERVER_ENABLE=1 \
     -e API_SERVER_HOST=0.0.0.0 \
+    -e API_SERVER_PORT="$API_PORT" \
     -e AUDIO_INPUT_ENABLE=true \
     -e CONFIG_PATH=/app/config.py \
     -v "$WORK_DIR/config.py:/app/config.py:ro" \

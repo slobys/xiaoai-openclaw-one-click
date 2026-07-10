@@ -69,6 +69,7 @@ sh install-noflash.sh --restart
 
 Raw Audio 实验版：
 小爱音箱 Open-XiaoAI Client  ->  ws://软路由或NAS:4499  ->  open-xiaoai-bridge Docker  ->  DeepSeek / OpenAI / Ollama / OpenClaw API Bridge
+OpenWrt bridge 网络 DNS/NAT 异常时，也可切到 host 模式：ws://软路由:4399
 ```
 
 免刷机版需要准备：
@@ -88,6 +89,7 @@ Raw Audio 实验版额外需要：
 - 音箱已刷 Open-XiaoAI 补丁固件，并能 SSH 登录。
 - 如果在 OpenWrt 上初始化音箱端遇到 `No matching algo hostkey`，脚本会自动尝试安装 `openssh-client`；OpenWrt 25.12+ 使用 `apk`，旧版使用 `opkg`。
 - 服务器开放 TCP `4499`，这是 Raw Audio 默认 WebSocket 端口，避免和刷机版 `4399` 冲突。
+- 如果 OpenWrt Docker bridge 网络里无法解析外部 API，可在 Raw Audio `.env` 设置 `XIAOAI_DOCKER_NETWORK_MODE=host`。host 模式不走端口映射，WebSocket 会直接使用宿主机 `4399`，不能和普通刷机版服务同时占用。
 - 首次部署会下载 VAD/KWS/ASR 模型包，体积较大，建议放在空间充足的设备上。
 
 ## 刷机版直接部署
@@ -148,6 +150,21 @@ Raw Audio 工作目录：
 ```env
 RAWAUDIO_WAKE_KEYWORDS=你好小黑,小黑小黑
 ```
+
+OpenWrt 上如果宿主机能解析 `api.deepseek.com`，但容器内不能解析：
+
+```sh
+nslookup api.deepseek.com
+docker exec xiaoai-rawaudio-bridge getent hosts api.deepseek.com
+```
+
+可以把 Raw Audio 改成 host 网络：
+
+```env
+XIAOAI_DOCKER_NETWORK_MODE=host
+```
+
+然后用菜单 `20` 重建服务端，再用菜单 `18` 重新初始化音箱端 Client。host 模式下音箱会连接 `ws://软路由IP:4399`，HTTP API 默认仍是 `9093`。
 
 默认模型来源是 DeepSeek。也可以在 `.env` 改成：
 
