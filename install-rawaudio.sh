@@ -150,11 +150,31 @@ detect_server_ip() {
   [ -n "$SERVER_IP" ] || die "服务器 IP 不能为空"
 }
 
+speaker_ssh_is_openssh() {
+  ssh_version=$(ssh -V 2>&1 || true)
+  printf '%s\n' "$ssh_version" | grep -qi 'OpenSSH'
+}
+
+ensure_speaker_ssh_client() {
+  command -v ssh >/dev/null 2>&1 || die "本机缺少 ssh"
+  if speaker_ssh_is_openssh; then
+    return 0
+  fi
+  if [ -f /etc/openwrt_release ] && command -v opkg >/dev/null 2>&1; then
+    log "检测到 OpenWrt 精简 SSH，正在安装完整版 OpenSSH 客户端以兼容 LX06/OH2P 的 ssh-rsa..."
+    opkg update || die "opkg update 失败，请检查 OpenWrt 软件源和网络"
+    opkg install openssh-client || die "安装 openssh-client 失败，请确认软件源可用且剩余空间足够"
+    hash -r 2>/dev/null || true
+  fi
+  if ! speaker_ssh_is_openssh; then
+    log "警告: 当前 ssh 仍不是 OpenSSH，若后续出现 No matching algo hostkey，请先安装 openssh-client。"
+  fi
+}
+
 run_speaker_ssh() {
   target="$1"
   shift
-  ssh_version=$(ssh -V 2>&1 || true)
-  if printf '%s\n' "$ssh_version" | grep -qi 'OpenSSH'; then
+  if speaker_ssh_is_openssh; then
     ssh \
       -o HostKeyAlgorithms=+ssh-rsa \
       -o PubkeyAcceptedAlgorithms=+ssh-rsa \
@@ -177,7 +197,7 @@ explain_speaker_ssh_failure() {
 客户端不支持 LX06/OH2P 固件使用的旧 ssh-rsa hostkey 算法。
 
 处理方式：
-  1) 在 OpenWrt 上安装完整版 OpenSSH 客户端后重试菜单 18：
+  1) 脚本会在 OpenWrt 上自动尝试安装完整版 OpenSSH 客户端；如果自动安装失败，请手动执行后重试菜单 18：
      opkg update
      opkg install openssh-client
 
@@ -312,7 +332,7 @@ ask_client_inputs() {
 
 install_client() {
   ask_client_inputs
-  command -v ssh >/dev/null 2>&1 || die "本机缺少 ssh"
+  ensure_speaker_ssh_client
   ws_url="ws://${SERVER_IP}:${PORT}"
   log "正在配置音箱端 Client: root@${SPEAKER_IP} -> ${ws_url}"
   if ! run_speaker_ssh "root@${SPEAKER_IP}" "
