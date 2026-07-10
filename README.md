@@ -80,13 +80,13 @@ Raw Audio 实验版：
 刷机版额外需要：
 
 - 音箱已刷 Open-XiaoAI 补丁固件，并能 SSH 登录。
-- 如果在 OpenWrt 上初始化音箱端遇到 `No matching algo hostkey`，脚本会自动尝试安装 `openssh-client`。
+- 如果在 OpenWrt 上初始化音箱端遇到 `No matching algo hostkey`，脚本会自动尝试安装 `openssh-client`；OpenWrt 25.12+ 使用 `apk`，旧版使用 `opkg`。
 - MiGPT 服务器开放 TCP `4399`。
 
 Raw Audio 实验版额外需要：
 
 - 音箱已刷 Open-XiaoAI 补丁固件，并能 SSH 登录。
-- 如果在 OpenWrt 上初始化音箱端遇到 `No matching algo hostkey`，脚本会自动尝试安装 `openssh-client`。
+- 如果在 OpenWrt 上初始化音箱端遇到 `No matching algo hostkey`，脚本会自动尝试安装 `openssh-client`；OpenWrt 25.12+ 使用 `apk`，旧版使用 `opkg`。
 - 服务器开放 TCP `4499`，这是 Raw Audio 默认 WebSocket 端口，避免和刷机版 `4399` 冲突。
 - 首次部署会下载 VAD/KWS/ASR 模型包，体积较大，建议放在空间充足的设备上。
 

@@ -182,17 +182,30 @@ find_openssh_client() {
   return 1
 }
 
+install_openssh_client_if_possible() {
+  if command -v apk >/dev/null 2>&1; then
+    log "检测到 OpenWrt 新版 apk 包管理器，正在安装完整版 OpenSSH 客户端以兼容 LX06/OH2P 的 ssh-rsa..."
+    apk update || die "apk update 失败，请检查 OpenWrt 软件源和网络"
+    apk add openssh-client || apk add openssh || die "安装 openssh-client 失败，请确认软件源可用且剩余空间足够"
+    hash -r 2>/dev/null || true
+    return 0
+  fi
+  if command -v opkg >/dev/null 2>&1; then
+    log "检测到 OpenWrt 旧版 opkg 包管理器，正在安装完整版 OpenSSH 客户端以兼容 LX06/OH2P 的 ssh-rsa..."
+    opkg update || die "opkg update 失败，请检查 OpenWrt 软件源和网络"
+    opkg install openssh-client || die "安装 openssh-client 失败，请确认软件源可用且剩余空间足够"
+    hash -r 2>/dev/null || true
+    return 0
+  fi
+  return 1
+}
+
 ensure_speaker_ssh_client() {
   command -v ssh >/dev/null 2>&1 || die "本机缺少 ssh"
   if SPEAKER_SSH_BIN=$(find_openssh_client 2>/dev/null); then
     return 0
   fi
-  if command -v opkg >/dev/null 2>&1; then
-    log "检测到 OpenWrt 精简 SSH，正在安装完整版 OpenSSH 客户端以兼容 LX06/OH2P 的 ssh-rsa..."
-    opkg update || die "opkg update 失败，请检查 OpenWrt 软件源和网络"
-    opkg install openssh-client || die "安装 openssh-client 失败，请确认软件源可用且剩余空间足够"
-    hash -r 2>/dev/null || true
-  fi
+  install_openssh_client_if_possible || true
   if SPEAKER_SSH_BIN=$(find_openssh_client 2>/dev/null); then
     return 0
   fi
@@ -231,7 +244,12 @@ explain_speaker_ssh_failure() {
 客户端不支持 LX06/OH2P 固件使用的旧 ssh-rsa hostkey 算法。
 
 处理方式：
-  1) 脚本会在 OpenWrt 上自动尝试安装完整版 OpenSSH 客户端；如果自动安装失败，请手动执行后重试音箱端初始化：
+  1) 脚本会在 OpenWrt 上自动尝试安装完整版 OpenSSH 客户端；如果自动安装失败，请按系统版本手动执行后重试音箱端初始化：
+     # OpenWrt 25.12+:
+     apk update
+     apk add openssh-client
+
+     # OpenWrt 24.10 及更早:
      opkg update
      opkg install openssh-client
 
