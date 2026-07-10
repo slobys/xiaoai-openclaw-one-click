@@ -68,7 +68,7 @@ sh install-noflash.sh --restart
 小爱音箱 Open-XiaoAI Client  ->  ws://软路由或NAS:4399  ->  open-xiaoai-migpt Docker
 
 Raw Audio 实验版：
-小爱音箱 Open-XiaoAI Client  ->  ws://软路由或NAS:4499  ->  open-xiaoai-bridge Docker  ->  DeepSeek / OpenAI / Ollama / OpenClaw API Bridge
+小爱音箱 Open-XiaoAI Client  ->  ws://软路由或NAS:4499  ->  open-xiaoai-bridge Docker  ->  DeepSeek / OpenAI / Gemini / Ollama / OpenClaw API Bridge
 OpenWrt bridge 网络 DNS/NAT 异常时，也可切到 host 模式：ws://软路由:4399
 ```
 
@@ -177,7 +177,22 @@ OLLAMA_MODEL=qwen3:4b
 可选值：
 
 ```text
-deepseek / openai / ollama / openclaw / custom
+deepseek / openai / gemini / ollama / openclaw / custom
+```
+
+Raw Audio 会按当前 `RAWAUDIO_DEFAULT_PROVIDER` 和模型变量自动生成身份提示，避免问“你是什么模型”时误答成豆包或其他模型。需要完全自定义身份时再设置：
+
+```env
+XIAOAI_SYSTEM_PROMPT=你是运行在小爱音箱上的语音助手。回答要口语化、简短，不要 markdown。
+```
+
+Gemini 走 Google 官方 OpenAI-compatible 接口：
+
+```env
+RAWAUDIO_DEFAULT_PROVIDER=gemini
+GEMINI_API_KEY=你的 Gemini Key
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+GEMINI_MODEL=gemini-3.5-flash
 ```
 
 这条路线是完全接管音频输入的高级模式，适合测试自定义唤醒词和不用小米 ASR 的方案。只想“保留小爱同学唤醒和小米 ASR，只换大脑”时，优先研究 Native ASR Bridge。

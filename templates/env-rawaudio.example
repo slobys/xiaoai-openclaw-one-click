@@ -1,7 +1,11 @@
 # Raw Audio 实验版：PCM -> VAD/KWS -> 本地 ASR -> OpenAI-compatible LLM
 
-# 默认模型来源：deepseek / openai / ollama / openclaw / custom
+# 默认模型来源：deepseek / openai / gemini / ollama / openclaw / custom
 RAWAUDIO_DEFAULT_PROVIDER=deepseek
+
+# 默认会按当前 provider/model 自动生成身份提示，避免模型误称自己是其他厂商。
+# 需要完全自定义时再取消下一行注释。
+# XIAOAI_SYSTEM_PROMPT=你是运行在小爱音箱上的语音助手。回答要口语化、简短，不要 markdown。
 
 # 自定义唤醒词，多个用英文逗号分隔。改完后重建容器以重新生成关键词文件。
 RAWAUDIO_WAKE_KEYWORDS=你好小黑,小黑小黑
@@ -28,6 +32,11 @@ DEEPSEEK_MODEL=deepseek-v4-flash
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4o-mini
+
+# Gemini OpenAI-compatible API
+GEMINI_API_KEY=
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+GEMINI_MODEL=gemini-3.5-flash
 
 # Ollama
 OLLAMA_BASE_URL=http://192.168.2.193:11434/v1

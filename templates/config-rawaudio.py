@@ -1,10 +1,20 @@
 import os
 
 
-DEFAULT_SYSTEM_PROMPT = (
-    "你是运行在小爱音箱上的语音助手，由大模型驱动。"
+DEFAULT_SYSTEM_PROMPT_TEMPLATE = (
+    "你是运行在小爱音箱上的语音助手，当前使用 {provider} {model} 模型。"
+    "如果用户问你用的是什么模型，只按这个信息回答，不要猜测其他厂商。"
     "口播规则：口语化、简短；不要markdown；不要念URL；解释类优先两句话内。"
 )
+
+PROVIDER_DISPLAY_NAMES = {
+    "deepseek": "DeepSeek",
+    "openai": "OpenAI",
+    "gemini": "Gemini",
+    "ollama": "Ollama",
+    "openclaw": "OpenClaw",
+    "custom": "Custom OpenAI-compatible",
+}
 
 
 def env(name, default=""):
@@ -59,6 +69,11 @@ def openai_compatible_settings():
             "api_key": env("OPENAI_API_KEY", ""),
             "model": env("OPENAI_MODEL", "gpt-4o-mini"),
         },
+        "gemini": {
+            "base_url": env("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/"),
+            "api_key": env("GEMINI_API_KEY", ""),
+            "model": env("GEMINI_MODEL", "gemini-3.5-flash"),
+        },
         "ollama": {
             "base_url": env("OLLAMA_BASE_URL", "http://192.168.2.193:11434/v1"),
             "api_key": env("OLLAMA_API_KEY", "ollama"),
@@ -76,6 +91,11 @@ def openai_compatible_settings():
         },
     }
     return providers.get(provider) or providers["deepseek"]
+
+
+def default_system_prompt(provider, model):
+    display_name = PROVIDER_DISPLAY_NAMES.get(provider, provider or "LLM")
+    return DEFAULT_SYSTEM_PROMPT_TEMPLATE.format(provider=display_name, model=model or "unknown")
 
 
 async def before_wakeup(speaker, text, source, app):
@@ -101,6 +121,7 @@ async def after_wakeup(speaker, source=None, session_key=None):
 
 
 llm = openai_compatible_settings()
+provider = selected_provider()
 
 APP_CONFIG = {
     "wakeup": {
@@ -151,7 +172,7 @@ APP_CONFIG = {
         "model": llm["model"],
         "input_mode": "local_asr",
         "session_key": "xiaoai-rawaudio",
-        "system_prompt": compact(env("XIAOAI_SYSTEM_PROMPT", DEFAULT_SYSTEM_PROMPT)),
+        "system_prompt": compact(env("XIAOAI_SYSTEM_PROMPT", default_system_prompt(provider, llm["model"]))),
         "temperature": env_float("LLM_TEMPERATURE", 0.7),
         "max_tokens": env_int("LLM_MAX_TOKENS", 512),
         "history_max_messages": env_int("CONVERSATION_TURNS", 6) * 2,
