@@ -17,6 +17,7 @@ SERVER_IP="${SERVER_IP:-}"
 DOCKER_DNS_ARGS=""
 DOCKER_NETWORK_ARGS=""
 DOCKER_PORT_ARGS=""
+SPEAKER_SSH_BIN="${XIAOAI_SSH_BIN:-}"
 
 log() { printf '%s\n' "$*"; }
 die() { log "错误: $*" >&2; exit 1; }
@@ -150,23 +151,55 @@ detect_server_ip() {
   [ -n "$SERVER_IP" ] || die "服务器 IP 不能为空"
 }
 
-speaker_ssh_is_openssh() {
-  ssh_version=$(ssh -V 2>&1 || true)
+get_ssh_bin() {
+  candidate="$1"
+  if [ -n "$candidate" ]; then
+    if [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    command -v "$candidate" 2>/dev/null && return 0
+    return 1
+  fi
+  command -v ssh 2>/dev/null
+}
+
+ssh_bin_is_openssh() {
+  candidate=$(get_ssh_bin "$1" 2>/dev/null || true)
+  [ -n "$candidate" ] || return 1
+  ssh_version=$("$candidate" -V 2>&1 || true)
   printf '%s\n' "$ssh_version" | grep -qi 'OpenSSH'
+}
+
+find_openssh_client() {
+  for candidate in "${XIAOAI_SSH_BIN:-}" ssh /usr/bin/ssh /usr/sbin/ssh /usr/bin/ssh.openssh /usr/sbin/ssh.openssh /opt/bin/ssh; do
+    [ -n "$candidate" ] || continue
+    if ssh_bin_is_openssh "$candidate"; then
+      get_ssh_bin "$candidate"
+      return 0
+    fi
+  done
+  return 1
 }
 
 ensure_speaker_ssh_client() {
   command -v ssh >/dev/null 2>&1 || die "本机缺少 ssh"
-  if speaker_ssh_is_openssh; then
+  if SPEAKER_SSH_BIN=$(find_openssh_client 2>/dev/null); then
     return 0
   fi
-  if [ -f /etc/openwrt_release ] && command -v opkg >/dev/null 2>&1; then
+  if command -v opkg >/dev/null 2>&1; then
     log "检测到 OpenWrt 精简 SSH，正在安装完整版 OpenSSH 客户端以兼容 LX06/OH2P 的 ssh-rsa..."
     opkg update || die "opkg update 失败，请检查 OpenWrt 软件源和网络"
     opkg install openssh-client || die "安装 openssh-client 失败，请确认软件源可用且剩余空间足够"
     hash -r 2>/dev/null || true
   fi
-  if ! speaker_ssh_is_openssh; then
+  if SPEAKER_SSH_BIN=$(find_openssh_client 2>/dev/null); then
+    return 0
+  fi
+  if [ -z "$SPEAKER_SSH_BIN" ]; then
+    SPEAKER_SSH_BIN=$(get_ssh_bin ssh 2>/dev/null || true)
+  fi
+  if ! ssh_bin_is_openssh "$SPEAKER_SSH_BIN"; then
     log "警告: 当前 ssh 仍不是 OpenSSH，若后续出现 No matching algo hostkey，请先安装 openssh-client。"
   fi
 }
@@ -174,15 +207,16 @@ ensure_speaker_ssh_client() {
 run_speaker_ssh() {
   target="$1"
   shift
-  if speaker_ssh_is_openssh; then
-    ssh \
+  ssh_bin="${SPEAKER_SSH_BIN:-$(get_ssh_bin ssh)}"
+  if ssh_bin_is_openssh "$ssh_bin"; then
+    "$ssh_bin" \
       -o HostKeyAlgorithms=+ssh-rsa \
       -o PubkeyAcceptedAlgorithms=+ssh-rsa \
       -o StrictHostKeyChecking=no \
       -o UserKnownHostsFile=/dev/null \
       "$target" "$@"
   else
-    ssh "$target" "$@"
+    "$ssh_bin" "$target" "$@"
   fi
 }
 
