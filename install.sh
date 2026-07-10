@@ -259,7 +259,7 @@ explain_speaker_ssh_failure() {
      wget -O /data/init.sh '${CLIENT_BOOT_URL}'
      chmod +x /data/init.sh
      wget -O /tmp/open-xiaoai-init.sh '${CLIENT_INIT_URL}'
-     sh /tmp/open-xiaoai-init.sh
+     sh /tmp/open-xiaoai-init.sh >/tmp/open-xiaoai-client.log 2>&1 </dev/null &
 EOF
 }
 
@@ -631,17 +631,19 @@ install_client() {
     echo '${ws_url}' > /data/open-xiaoai/server.txt
     if command -v curl >/dev/null 2>&1; then
       curl -L -o /data/init.sh '${CLIENT_BOOT_URL}'
-      curl -sSfL '${CLIENT_INIT_URL}' | sh
+      curl -sSfL -o /tmp/open-xiaoai-init.sh '${CLIENT_INIT_URL}'
     else
       wget -O /data/init.sh '${CLIENT_BOOT_URL}'
-      wget -qO- '${CLIENT_INIT_URL}' | sh
+      wget -O /tmp/open-xiaoai-init.sh '${CLIENT_INIT_URL}'
     fi
     chmod +x /data/init.sh
+    sh /tmp/open-xiaoai-init.sh >/tmp/open-xiaoai-client.log 2>&1 </dev/null &
   "; then
     explain_speaker_ssh_failure
     die "音箱端初始化失败"
   fi
-  log "音箱端已配置。重启音箱后会自启动；当前也已尝试启动 Client。"
+  log "音箱端已配置，Client 已在后台启动。重启音箱后会自启动。"
+  log "音箱端日志: ssh root@${SPEAKER_IP} 'tail -f /tmp/open-xiaoai-client.log'"
 }
 
 show_status() {
