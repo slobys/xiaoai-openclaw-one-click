@@ -1,0 +1,62 @@
+# Raw Audio 实验版：PCM -> VAD/KWS -> 本地 ASR -> OpenAI-compatible LLM
+
+# 默认模型来源：deepseek / openai / ollama / openclaw / custom
+RAWAUDIO_DEFAULT_PROVIDER=deepseek
+
+# 自定义唤醒词，多个用英文逗号分隔。改完后重建容器以重新生成关键词文件。
+RAWAUDIO_WAKE_KEYWORDS=你好小黑,小黑小黑
+RAWAUDIO_WAKE_PROMPT=我在
+RAWAUDIO_EXIT_PROMPT=再见
+RAWAUDIO_EXIT_KEYWORDS=退出,停止,再见
+
+# VAD/KWS 参数。误触发多就调高 threshold；不灵敏就调低。
+RAWAUDIO_KWS_THRESHOLD=0.2
+RAWAUDIO_KWS_SCORE=2.0
+RAWAUDIO_VAD_THRESHOLD=0.10
+RAWAUDIO_INPUT_GAIN=1.0
+
+# ASR 模型：sense_voice / paraformer / fire_red_asr / doubao
+RAWAUDIO_ASR_MODEL=sense_voice
+RAWAUDIO_ASR_INT8=true
+
+# DeepSeek
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-flash
+
+# OpenAI 或兼容接口
+OPENAI_API_KEY=
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+
+# Ollama
+OLLAMA_BASE_URL=http://192.168.2.193:11434/v1
+OLLAMA_API_KEY=ollama
+OLLAMA_MODEL=qwen3:4b
+
+# OpenClaw API Bridge
+OPENCLAW_BASE_URL=http://192.168.2.238:11435/v1
+OPENCLAW_API_KEY=xiaoai-local
+OPENCLAW_DISPLAY_MODEL=open
+
+# Custom OpenAI Compatible API
+OPENAI_COMPAT_BASE_URL=
+OPENAI_COMPAT_API_KEY=
+OPENAI_COMPAT_MODEL=
+
+# LLM / 上下文
+CONVERSATION_TURNS=6
+LLM_TIMEOUT_SECONDS=120
+LLM_MAX_TOKENS=512
+LLM_TEMPERATURE=0.7
+
+# TTS：默认 xiaoai 使用小爱原生 TTS；填豆包 speaker id 则使用豆包 TTS。
+RAWAUDIO_TTS_SPEAKER=xiaoai
+DOUBAO_TTS_APP_ID=
+DOUBAO_TTS_ACCESS_KEY=
+DOUBAO_TTS_SPEAKER=zh_female_vv_uranus_bigtts
+DOUBAO_TTS_FORMAT=pcm
+DOUBAO_TTS_STREAM=true
+
+# Docker
+XIAOAI_DOCKER_DNS=

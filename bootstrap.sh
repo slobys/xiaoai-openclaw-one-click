@@ -5,6 +5,7 @@ PROJECT_NAME="xiaoai-openclaw"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 INSTALL_SH="$SCRIPT_DIR/install.sh"
 NOFLASH_SH="$SCRIPT_DIR/install-noflash.sh"
+RAWAUDIO_SH="$SCRIPT_DIR/install-rawaudio.sh"
 BRIDGE_SH=""
 BASE_URL="${XIAOAI_OPENCLAW_BASE_URL:-https://raw.githubusercontent.com/slobys/xiaoai-openclaw-one-click/main}"
 CN_BASE_URL="${XIAOAI_OPENCLAW_CN_BASE_URL:-https://gitee.com/naiyou88/xiaoai-openclaw-one-click/raw/main}"
@@ -57,6 +58,13 @@ if [ ! -f "$NOFLASH_SH" ]; then
   NOFLASH_SH="$TMP_DIR/install-noflash.sh"
 fi
 
+if [ ! -f "$RAWAUDIO_SH" ]; then
+  mkdir -p "$TMP_DIR"
+  fetch_from_mirrors "install-rawaudio.sh" "$TMP_DIR/install-rawaudio.sh"
+  chmod +x "$TMP_DIR/install-rawaudio.sh"
+  RAWAUDIO_SH="$TMP_DIR/install-rawaudio.sh"
+fi
+
 ensure_bridge_sh() {
   BRIDGE_SH="$SCRIPT_DIR/install-openclaw-bridge.sh"
   if [ ! -f "$BRIDGE_SH" ]; then
@@ -92,6 +100,15 @@ show_menu() {
   echo "14) 部署 OpenClaw API Bridge（在 OpenClaw 设备运行）"
   echo "15) 重启 OpenClaw API Bridge（在 OpenClaw 设备运行）"
   echo "16) 清理 OpenClaw API Bridge（在 OpenClaw 设备运行）"
+  echo
+  echo "Raw Audio 实验版（PCM -> VAD/KWS -> 本地 ASR -> LLM）"
+  echo "17) 部署 Raw Audio 服务端 Docker"
+  echo "18) 初始化音箱端 Client 到 Raw Audio 服务"
+  echo "19) Raw Audio 服务端 + 音箱端一起部署"
+  echo "20) 重启/重建 Raw Audio 服务端 Docker"
+  echo "21) 查看 Raw Audio 服务端状态"
+  echo "22) 查看 Raw Audio 服务端日志"
+  echo "23) 卸载 Raw Audio 服务端容器（保留配置和模型）"
   echo "0) 退出"
   echo
 }
@@ -126,6 +143,13 @@ while true; do
       ensure_bridge_sh
       sh "$BRIDGE_SH" clean
       ;;
+    17) sh "$RAWAUDIO_SH" --server-only ;;
+    18) sh "$RAWAUDIO_SH" --client-only ;;
+    19) sh "$RAWAUDIO_SH" --all ;;
+    20) sh "$RAWAUDIO_SH" --restart ;;
+    21) sh "$RAWAUDIO_SH" --status ;;
+    22) sh "$RAWAUDIO_SH" --logs ;;
+    23) sh "$RAWAUDIO_SH" --uninstall ;;
     0) exit 0 ;;
     *) echo "无效选择" ;;
   esac

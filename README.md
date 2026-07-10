@@ -6,6 +6,7 @@
 
 - 免刷机版：小米账号登录，不需要 SSH 音箱，不刷 Open-XiaoAI 固件。
 - 刷机版：沿用已刷 Open-XiaoAI 固件的旧版体验。
+- Raw Audio 实验版：音箱麦克风 PCM -> VAD/KWS -> 本地 ASR -> 大模型。
 
 ## 一键菜单
 
@@ -65,6 +66,9 @@ sh install-noflash.sh --restart
 
 刷机版：
 小爱音箱 Open-XiaoAI Client  ->  ws://软路由或NAS:4399  ->  open-xiaoai-migpt Docker
+
+Raw Audio 实验版：
+小爱音箱 Open-XiaoAI Client  ->  ws://软路由或NAS:4499  ->  open-xiaoai-bridge Docker  ->  DeepSeek / OpenAI / Ollama / OpenClaw API Bridge
 ```
 
 免刷机版需要准备：
@@ -77,6 +81,12 @@ sh install-noflash.sh --restart
 
 - 音箱已刷 Open-XiaoAI 补丁固件，并能 SSH 登录。
 - MiGPT 服务器开放 TCP `4399`。
+
+Raw Audio 实验版额外需要：
+
+- 音箱已刷 Open-XiaoAI 补丁固件，并能 SSH 登录。
+- 服务器开放 TCP `4499`，这是 Raw Audio 默认 WebSocket 端口，避免和刷机版 `4399` 冲突。
+- 首次部署会下载 VAD/KWS/ASR 模型包，体积较大，建议放在空间充足的设备上。
 
 ## 刷机版直接部署
 
@@ -107,6 +117,51 @@ SERVER_IP=192.168.2.1 xiaoai-openclaw
 ```env
 CONVERSATION_TURNS=0
 ```
+
+## Raw Audio 实验版
+
+Raw Audio 版是第三条独立路线，不替换现有免刷机版和刷机版。它使用 Open-XiaoAI Client 采集音箱麦克风 PCM，在服务端做 VAD、KWS、自定义唤醒词、本地 ASR，再把文字交给 OpenAI-compatible 大模型。
+
+```sh
+# 只部署 Raw Audio 服务端
+sh install-rawaudio.sh --server-only
+
+# 只把音箱端 Client 指向 Raw Audio 服务端
+sh install-rawaudio.sh --client-only --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
+
+# 服务端和音箱端一起部署
+sh install-rawaudio.sh --all --speaker-ip 192.168.31.227 --server-ip 192.168.31.10
+```
+
+Raw Audio 工作目录：
+
+```text
+/opt/xiaoai-rawaudio-bridge/.env
+/opt/xiaoai-rawaudio-bridge/config.py
+/opt/xiaoai-rawaudio-bridge/models
+```
+
+默认唤醒词是：
+
+```env
+RAWAUDIO_WAKE_KEYWORDS=你好小黑,小黑小黑
+```
+
+默认模型来源是 DeepSeek。也可以在 `.env` 改成：
+
+```env
+RAWAUDIO_DEFAULT_PROVIDER=ollama
+OLLAMA_BASE_URL=http://电脑IP:11434/v1
+OLLAMA_MODEL=qwen3:4b
+```
+
+可选值：
+
+```text
+deepseek / openai / ollama / openclaw / custom
+```
+
+这条路线是完全接管音频输入的高级模式，适合测试自定义唤醒词和不用小米 ASR 的方案。只想“保留小爱同学唤醒和小米 ASR，只换大脑”时，优先研究 Native ASR Bridge。
 
 ## DeepSeek
 
@@ -217,6 +272,9 @@ SPEAK_CHUNK_GAP_MS=260
 - 刷机版工作目录：`/opt/xiaoai-openclaw`
 - 刷机版配置：`/opt/xiaoai-openclaw/config.ts`
 - 刷机版环境变量：`/opt/xiaoai-openclaw/.env`
+- Raw Audio 工作目录：`/opt/xiaoai-rawaudio-bridge`
+- Raw Audio 配置：`/opt/xiaoai-rawaudio-bridge/config.py`
+- Raw Audio 环境变量：`/opt/xiaoai-rawaudio-bridge/.env`
 - 管理命令：`xiaoai-openclaw`
 - OpenClaw bridge：`/opt/openclaw-llm-bridge`
 
