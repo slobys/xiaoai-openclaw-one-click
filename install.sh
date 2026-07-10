@@ -150,6 +150,47 @@ detect_server_ip() {
   [ -n "$SERVER_IP" ] || die "服务器 IP 不能为空"
 }
 
+run_speaker_ssh() {
+  target="$1"
+  shift
+  ssh_version=$(ssh -V 2>&1 || true)
+  if printf '%s\n' "$ssh_version" | grep -qi 'OpenSSH'; then
+    ssh \
+      -o HostKeyAlgorithms=+ssh-rsa \
+      -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+      -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null \
+      "$target" "$@"
+  else
+    ssh "$target" "$@"
+  fi
+}
+
+explain_speaker_ssh_failure() {
+  cat <<EOF
+音箱 SSH 初始化失败。
+
+如果你在 Windows/macOS 上可以用下面命令登录音箱：
+  ssh -o HostKeyAlgorithms=+ssh-rsa root@${SPEAKER_IP}
+
+但在 OpenWrt 上失败并出现 "No matching algo hostkey"，说明 OpenWrt 自带的精简 SSH
+客户端不支持 LX06/OH2P 固件使用的旧 ssh-rsa hostkey 算法。
+
+处理方式：
+  1) 在 OpenWrt 上安装完整版 OpenSSH 客户端后重试音箱端初始化：
+     opkg update
+     opkg install openssh-client
+
+  2) 或者在 Windows/macOS 已登录音箱的 SSH 窗口中手动执行：
+     mkdir -p /data/open-xiaoai
+     echo 'ws://${SERVER_IP}:${PORT}' > /data/open-xiaoai/server.txt
+     wget -O /data/init.sh '${CLIENT_BOOT_URL}'
+     chmod +x /data/init.sh
+     wget -O /tmp/open-xiaoai-init.sh '${CLIENT_INIT_URL}'
+     sh /tmp/open-xiaoai-init.sh
+EOF
+}
+
 install_docker_if_needed() {
   if command -v docker >/dev/null 2>&1; then
     return 0
@@ -512,7 +553,7 @@ install_client() {
   command -v ssh >/dev/null 2>&1 || die "本机缺少 ssh"
   ws_url="ws://${SERVER_IP}:${PORT}"
   log "正在配置音箱端 Client: root@${SPEAKER_IP} -> ${ws_url}"
-  ssh -o HostKeyAlgorithms=+ssh-rsa -o StrictHostKeyChecking=accept-new "root@${SPEAKER_IP}" "
+  if ! run_speaker_ssh "root@${SPEAKER_IP}" "
     set -e
     mkdir -p /data/open-xiaoai
     echo '${ws_url}' > /data/open-xiaoai/server.txt
@@ -524,7 +565,10 @@ install_client() {
       wget -qO- '${CLIENT_INIT_URL}' | sh
     fi
     chmod +x /data/init.sh
-  "
+  "; then
+    explain_speaker_ssh_failure
+    die "音箱端初始化失败"
+  fi
   log "音箱端已配置。重启音箱后会自启动；当前也已尝试启动 Client。"
 }
 
