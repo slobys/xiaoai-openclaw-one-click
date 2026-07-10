@@ -285,6 +285,10 @@ build_docker_dns_args() {
   DOCKER_DNS_ARGS=""
   dns_list="${XIAOAI_DOCKER_DNS:-}"
   [ -z "$dns_list" ] && [ -f "$WORK_DIR/.env" ] && dns_list=$(awk -F= '$1=="XIAOAI_DOCKER_DNS" { print $2; exit }' "$WORK_DIR/.env")
+  if [ -z "$dns_list" ] && { command -v apk >/dev/null 2>&1 || command -v opkg >/dev/null 2>&1; }; then
+    dns_list="223.5.5.5,119.29.29.29"
+    log "检测到 OpenWrt 且未配置 XIAOAI_DOCKER_DNS，默认使用容器 DNS: $dns_list"
+  fi
   [ -z "$dns_list" ] && return 0
   old_ifs="$IFS"
   IFS=", "
