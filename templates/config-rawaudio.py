@@ -7,7 +7,7 @@ except Exception:
     ZoneInfo = None
 
 
-RAWAUDIO_CONFIG_VERSION = "2026-07-12-system-rules"
+RAWAUDIO_CONFIG_VERSION = "2026-07-12-openai-reply-log"
 
 DEFAULT_RULE_PROMPT = (
     "将回复处理成纯文字口播版，不要返回 markdown，不要包含代码块，"
@@ -258,8 +258,30 @@ def install_openai_local_command_patch():
     OpenAIManager._rawaudio_identity_patch_installed = True
 
 
+def install_openai_reply_log_patch():
+    try:
+        from core.utils.logger import logger
+    except Exception:
+        return
+
+    if getattr(logger, "_rawaudio_openai_reply_log_patch_installed", False):
+        return
+
+    original_ai_response = logger.ai_response
+
+    def patched_ai_response(text, module="XiaoZhi"):
+        if str(module).startswith("OpenAI"):
+            logger.info(f"🤖 OpenAI: {text}", module=module)
+            return
+        return original_ai_response(text, module=module)
+
+    logger.ai_response = patched_ai_response
+    logger._rawaudio_openai_reply_log_patch_installed = True
+
+
 def install_rawaudio_runtime_patches():
     install_openai_local_command_patch()
+    install_openai_reply_log_patch()
 
     try:
         from core.openai_conversation import OpenAIConversationController
