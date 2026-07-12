@@ -1,11 +1,18 @@
 import os
+from datetime import datetime, timedelta, timezone
+
+try:
+    from zoneinfo import ZoneInfo
+except Exception:
+    ZoneInfo = None
 
 
-RAWAUDIO_CONFIG_VERSION = "2026-07-12-single-turn"
+RAWAUDIO_CONFIG_VERSION = "2026-07-12-current-date"
 
 DEFAULT_SYSTEM_PROMPT_TEMPLATE = (
     "你是运行在小爱音箱上的语音助手，当前使用 {provider} {model} 模型。"
     "如果用户问你用的是什么模型，只按这个信息回答，不要猜测其他厂商。"
+    "回答今天、明天、昨天、星期几等日期时间问题时，必须以系统注入的当前日期时间为准。"
     "口播规则：口语化、简短；不要markdown；不要念URL；解释类优先两句话内。"
 )
 
@@ -138,6 +145,29 @@ def current_model_text():
     return f"当前使用 {display_name} {model}。"
 
 
+def local_timezone():
+    tz_name = env("RAWAUDIO_TIMEZONE", env("TZ", "Asia/Shanghai"))
+    if ZoneInfo:
+        try:
+            return ZoneInfo(tz_name)
+        except Exception:
+            pass
+    if tz_name in ("Asia/Shanghai", "Asia/Chongqing", "Asia/Harbin", "Asia/Urumqi", "CST-8"):
+        return timezone(timedelta(hours=8), "Asia/Shanghai")
+    return datetime.now().astimezone().tzinfo
+
+
+def current_datetime_text():
+    now = datetime.now(local_timezone())
+    weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+    weekday = weekdays[now.weekday()]
+    return (
+        f"当前日期时间：{now.year}年{now.month}月{now.day}日 "
+        f"{now.hour:02d}:{now.minute:02d}，{weekday}。"
+        "回答今天、明天、昨天、星期几等问题时必须以这个时间为准。"
+    )
+
+
 def is_single_turn_mode():
     return env_bool("RAWAUDIO_SINGLE_TURN", True)
 
@@ -189,6 +219,7 @@ def install_openai_local_command_patch():
         return
 
     original_request = OpenAIManager._request_chat_completion
+    original_build_messages = OpenAIManager._build_messages
 
     async def patched_request(cls, text):
         if is_model_identity_question(text):
@@ -198,7 +229,15 @@ def install_openai_local_command_patch():
             return response
         return await original_request(text)
 
+    def patched_build_messages(cls, history, text):
+        messages = original_build_messages(history, text)
+        if env_bool("RAWAUDIO_INJECT_DATE", True):
+            insert_at = 1 if messages and messages[0].get("role") == "system" else 0
+            messages.insert(insert_at, {"role": "system", "content": current_datetime_text()})
+        return messages
+
     OpenAIManager._request_chat_completion = classmethod(patched_request)
+    OpenAIManager._build_messages = classmethod(patched_build_messages)
     OpenAIManager._rawaudio_identity_patch_installed = True
 
 
