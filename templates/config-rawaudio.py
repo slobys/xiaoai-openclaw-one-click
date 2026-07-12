@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 try:
     from zoneinfo import ZoneInfo
@@ -7,7 +8,7 @@ except Exception:
     ZoneInfo = None
 
 
-RAWAUDIO_CONFIG_VERSION = "2026-07-12-provider-log-name"
+RAWAUDIO_CONFIG_VERSION = "2026-07-12-provider-route-log"
 
 DEFAULT_RULE_PROMPT = (
     "将回复处理成纯文字口播版，不要返回 markdown，不要包含代码块，"
@@ -15,7 +16,7 @@ DEFAULT_RULE_PROMPT = (
 )
 
 DEFAULT_SYSTEM_PROMPT_TEMPLATE = (
-    "你是运行在小爱音箱上的语音助手，当前使用 {provider} {model} 模型。"
+    "你是运行在音箱上的AI语音助手，不要自称小爱，当前调用 {provider} {model} 模型。"
     "如果用户问你用的是什么模型，只按这个信息回答，不要猜测其他厂商。"
     "回答今天、明天、昨天、星期几等日期时间问题时，必须以系统注入的当前日期时间为准。"
     "口播规则：口语化、简短；不要markdown；不要念URL；解释类优先两句话内。"
@@ -167,6 +168,28 @@ def provider_log_name():
     return PROVIDER_DISPLAY_NAMES.get(provider, provider or "LLM")
 
 
+def base_url_host(base_url):
+    parsed = urlparse(base_url or "")
+    return parsed.netloc or parsed.path or "unknown"
+
+
+def route_log_text():
+    settings = openai_compatible_settings()
+    model = settings.get("model") or "unknown"
+    host = base_url_host(settings.get("base_url"))
+    return f"→ {model} @ {host}"
+
+
+def log_provider_route():
+    if not env_bool("RAWAUDIO_LOG_ROUTE", True):
+        return
+    try:
+        from core.utils.logger import logger
+    except Exception:
+        return
+    logger.info(route_log_text(), module=provider_log_name())
+
+
 def local_timezone():
     tz_name = env("RAWAUDIO_TIMEZONE", env("TZ", "Asia/Shanghai"))
     if ZoneInfo:
@@ -249,6 +272,7 @@ def install_openai_local_command_patch():
             history = cls._sessions.setdefault(cls._session_key, [])
             cls._append_history(history, text, response)
             return response
+        log_provider_route()
         return await original_request(text)
 
     def patched_build_messages(cls, history, text):

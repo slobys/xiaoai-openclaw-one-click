@@ -19,7 +19,7 @@ ENV_PROXY_URL="${XIAOAI_RAWAUDIO_ENV_PROXY_URL:-https://gh-proxy.com/https://raw
 MODELS_URL="${XIAOAI_RAWAUDIO_MODELS_URL:-https://github.com/coderzc/open-xiaoai-bridge/releases/download/vad-kws-asr-models/models.zip}"
 CLIENT_INIT_URL="${XIAOAI_CLIENT_INIT_URL:-https://gitee.com/idootop/artifacts/releases/download/open-xiaoai-client/init.sh}"
 CLIENT_BOOT_URL="${XIAOAI_CLIENT_BOOT_URL:-https://gitee.com/idootop/artifacts/releases/download/open-xiaoai-client/boot.sh}"
-RAWAUDIO_CONFIG_VERSION="2026-07-12-provider-log-name"
+RAWAUDIO_CONFIG_VERSION="2026-07-12-provider-route-log"
 
 MODE=""
 SPEAKER_IP="${SPEAKER_IP:-}"
@@ -408,7 +408,7 @@ ensure_config() {
   elif [ "${XIAOAI_RAWAUDIO_KEEP_CONFIG:-}" = "true" ]; then
     log "保留现有 Raw Audio 配置: $WORK_DIR/config.py"
   elif ! grep -q "RAWAUDIO_CONFIG_VERSION = \"${RAWAUDIO_CONFIG_VERSION}\"" "$WORK_DIR/config.py"; then
-    log "检测到旧 Raw Audio 配置，刷新 config.py 以支持模型名日志、纯文字规则、当前日期、单轮收口和当前模型播报；.env 和 API Key 会保留。"
+    log "检测到旧 Raw Audio 配置，刷新 config.py 以支持模型路由日志、纯文字规则、当前日期、单轮收口和当前模型播报；.env 和 API Key 会保留。"
     install_config_template "$WORK_DIR/config.py"
   fi
   if [ ! -f "$WORK_DIR/.env" ]; then

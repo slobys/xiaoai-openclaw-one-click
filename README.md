@@ -174,10 +174,11 @@ Raw Audio 日志会显示用户输入和模型回复。正常情况下能看到�
 
 ```text
 [DeepSeek] 💬 我说：今天天气怎么样？
+[DeepSeek] → deepseek-v4-flash @ api.deepseek.com
 [DeepSeek] 🤖 ...
 ```
 
-如果默认模型切成 OpenAI、Gemini、Ollama，日志里的 `[DeepSeek]` 会同步变成 `[OpenAI]`、`[Gemini]`、`[Ollama]`。
+中间这行就是实际大模型路由，会显示当前模型名和接口域名，不显示 API Key。如果默认模型切成 OpenAI、Gemini、Ollama，日志里的 `[DeepSeek]` 会同步变成 `[OpenAI]`、`[Gemini]`、`[Ollama]`。
 
 如果本地 ASR 经常把唤醒词误识别成“你好小气/你好神气/你好想气”这类短句，可以在 `.env` 里继续扩展忽略列表：
 
@@ -217,7 +218,7 @@ deepseek / openai / gemini / ollama / openclaw / custom
 Raw Audio 会按当前 `RAWAUDIO_DEFAULT_PROVIDER` 和模型变量自动生成身份提示，避免问“你是什么模型”时误答成豆包或其他模型。需要完全自定义身份时再设置：
 
 ```env
-XIAOAI_SYSTEM_PROMPT=你是运行在小爱音箱上的语音助手。回答要口语化、简短，不要 markdown。
+XIAOAI_SYSTEM_PROMPT=你是运行在音箱上的AI语音助手，不要自称小爱。回答要口语化、简短，不要 markdown。
 ```
 
 如果你问“当前模型”“你现在用的是什么大模型”，Raw Audio 会直接按服务端配置播报，例如：
@@ -226,7 +227,7 @@ XIAOAI_SYSTEM_PROMPT=你是运行在小爱音箱上的语音助手。回答要�
 当前使用 DeepSeek deepseek-v4-flash。
 ```
 
-注意：只改 `.env` 后必须重建 Raw Audio 服务端，旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板，以支持模型名日志、纯文字规则、当前日期、当前模型播报和单轮收口；如果你手动改过 `config.py` 且不想覆盖，可运行：
+注意：只改 `.env` 后必须重建 Raw Audio 服务端，旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板，以支持模型路由日志、纯文字规则、当前日期、当前模型播报和单轮收口；如果你手动改过 `config.py` 且不想覆盖，可运行：
 
 ```sh
 XIAOAI_RAWAUDIO_KEEP_CONFIG=true sh install-rawaudio.sh --restart

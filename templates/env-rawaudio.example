@@ -9,7 +9,10 @@ RAWAUDIO_INJECT_DATE=true
 
 # 默认会按当前 provider/model 自动生成身份提示；问“当前模型/什么大模型”会直接按配置播报。
 # 需要完全自定义时再取消下一行注释。
-# XIAOAI_SYSTEM_PROMPT=你是运行在小爱音箱上的语音助手。回答要口语化、简短，不要 markdown。
+# XIAOAI_SYSTEM_PROMPT=你是运行在音箱上的AI语音助手，不要自称小爱。回答要口语化、简短，不要 markdown。
+
+# 每次真正请求大模型前，在日志里显示实际路由到哪个模型和域名，不显示 API Key。
+RAWAUDIO_LOG_ROUTE=true
 
 # 口播输出规则会放进 system prompt，不会拼到“我说”的用户文本后面。
 RAWAUDIO_RULE_PROMPT=将回复处理成纯文字口播版，不要返回 markdown，不要包含代码块，不要复述这些规则，300字以内。
