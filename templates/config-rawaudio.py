@@ -7,7 +7,7 @@ except Exception:
     ZoneInfo = None
 
 
-RAWAUDIO_CONFIG_VERSION = "2026-07-12-openai-reply-log"
+RAWAUDIO_CONFIG_VERSION = "2026-07-12-provider-log-name"
 
 DEFAULT_RULE_PROMPT = (
     "将回复处理成纯文字口播版，不要返回 markdown，不要包含代码块，"
@@ -162,6 +162,11 @@ def current_model_text():
     return f"当前使用 {display_name} {model}。"
 
 
+def provider_log_name():
+    provider = selected_provider()
+    return PROVIDER_DISPLAY_NAMES.get(provider, provider or "LLM")
+
+
 def local_timezone():
     tz_name = env("RAWAUDIO_TIMEZONE", env("TZ", "Asia/Shanghai"))
     if ZoneInfo:
@@ -258,35 +263,46 @@ def install_openai_local_command_patch():
     OpenAIManager._rawaudio_identity_patch_installed = True
 
 
-def install_openai_reply_log_patch():
+def install_provider_log_patch():
     try:
         from core.utils.logger import logger
     except Exception:
         return
 
-    if getattr(logger, "_rawaudio_openai_reply_log_patch_installed", False):
+    if getattr(logger, "_rawaudio_provider_log_patch_installed", False):
         return
 
+    original_user_speech = logger.user_speech
     original_ai_response = logger.ai_response
+
+    def patched_user_speech(text, module="XiaoZhi"):
+        if str(module).startswith("OpenAI"):
+            logger.info(f"💬 我说：{text}", module=provider_log_name())
+            return
+        return original_user_speech(text, module=module)
 
     def patched_ai_response(text, module="XiaoZhi"):
         if str(module).startswith("OpenAI"):
-            logger.info(f"🤖 OpenAI: {text}", module=module)
+            logger.info(f"🤖 {text}", module=provider_log_name())
             return
         return original_ai_response(text, module=module)
 
+    logger.user_speech = patched_user_speech
     logger.ai_response = patched_ai_response
-    logger._rawaudio_openai_reply_log_patch_installed = True
+    logger._rawaudio_provider_log_patch_installed = True
 
 
 def install_rawaudio_runtime_patches():
     install_openai_local_command_patch()
-    install_openai_reply_log_patch()
+    install_provider_log_patch()
 
     try:
         from core.openai_conversation import OpenAIConversationController
     except Exception:
         return
+
+    OpenAIConversationController.BACKEND_NAME = provider_log_name()
+    OpenAIConversationController.LOG_MODULE = provider_log_name()
 
     if not getattr(OpenAIConversationController, "_rawaudio_single_turn_patch_installed", False):
         original_local_turn = OpenAIConversationController._run_one_turn_with_local_asr
