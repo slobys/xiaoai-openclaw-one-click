@@ -11,6 +11,9 @@ RAWAUDIO_INJECT_DATE=true
 # 需要完全自定义时再取消下一行注释。
 # XIAOAI_SYSTEM_PROMPT=你是运行在小爱音箱上的语音助手。回答要口语化、简短，不要 markdown。
 
+# 口播输出规则会放进 system prompt，不会拼到“我说”的用户文本后面。
+RAWAUDIO_RULE_PROMPT=将回复处理成纯文字口播版，不要返回 markdown，不要包含代码块，不要复述这些规则，300字以内。
+
 # 自定义唤醒词，多个用英文逗号分隔。改完后重建容器以重新生成关键词文件。
 RAWAUDIO_WAKE_KEYWORDS=你好小黑,小黑小黑
 RAWAUDIO_WAKE_PROMPT=我在

@@ -7,7 +7,12 @@ except Exception:
     ZoneInfo = None
 
 
-RAWAUDIO_CONFIG_VERSION = "2026-07-12-current-date"
+RAWAUDIO_CONFIG_VERSION = "2026-07-12-system-rules"
+
+DEFAULT_RULE_PROMPT = (
+    "将回复处理成纯文字口播版，不要返回 markdown，不要包含代码块，"
+    "不要复述这些规则，300字以内。"
+)
 
 DEFAULT_SYSTEM_PROMPT_TEMPLATE = (
     "你是运行在小爱音箱上的语音助手，当前使用 {provider} {model} 模型。"
@@ -135,6 +140,18 @@ def openai_compatible_settings():
 def default_system_prompt(provider, model):
     display_name = PROVIDER_DISPLAY_NAMES.get(provider, provider or "LLM")
     return DEFAULT_SYSTEM_PROMPT_TEMPLATE.format(provider=display_name, model=model or "unknown")
+
+
+def rawaudio_rule_prompt():
+    return compact(env("RAWAUDIO_RULE_PROMPT", DEFAULT_RULE_PROMPT))
+
+
+def rawaudio_system_prompt(provider, model):
+    base_prompt = compact(env("XIAOAI_SYSTEM_PROMPT", default_system_prompt(provider, model)))
+    rule_prompt = rawaudio_rule_prompt()
+    if not rule_prompt:
+        return base_prompt
+    return compact(f"{base_prompt} {rule_prompt}")
 
 
 def current_model_text():
@@ -373,7 +390,7 @@ APP_CONFIG = {
         "model": llm["model"],
         "input_mode": "local_asr",
         "session_key": "xiaoai-rawaudio",
-        "system_prompt": compact(env("XIAOAI_SYSTEM_PROMPT", default_system_prompt(provider, llm["model"]))),
+        "system_prompt": rawaudio_system_prompt(provider, llm["model"]),
         "temperature": env_float("LLM_TEMPERATURE", 0.7),
         "max_tokens": env_int("LLM_MAX_TOKENS", 512),
         "history_max_messages": env_int("CONVERSATION_TURNS", 6) * 2,
@@ -382,10 +399,7 @@ APP_CONFIG = {
         "tts_speaker": env("RAWAUDIO_TTS_SPEAKER", "xiaoai"),
         "session_tts_speakers": {},
         "exit_keywords": env_list("RAWAUDIO_EXIT_KEYWORDS", ["退出", "停止", "再见"]),
-        "rule_prompt": env(
-            "RAWAUDIO_RULE_PROMPT",
-            "注意：将结果处理成纯文字版，不要返回任何 markdown 格式，也不要包含任何代码块，并将字数控制在300字以内",
-        ),
+        "rule_prompt": "",
         "rule_prompt_for_skill": "",
         "extra_body": {},
     },

@@ -164,6 +164,12 @@ RAWAUDIO_TIMEZONE=Asia/Shanghai
 RAWAUDIO_INJECT_DATE=true
 ```
 
+Raw Audio 的“纯文字、不要 markdown、300 字以内”规则默认放在 system prompt 里，不会再拼到“我说”的用户文本后面。需要改口播规则时设置：
+
+```env
+RAWAUDIO_RULE_PROMPT=将回复处理成纯文字口播版，不要返回 markdown，不要包含代码块，不要复述这些规则，300字以内。
+```
+
 如果本地 ASR 经常把唤醒词误识别成“你好小气/你好神气/你好想气”这类短句，可以在 `.env` 里继续扩展忽略列表：
 
 ```env
@@ -211,7 +217,7 @@ XIAOAI_SYSTEM_PROMPT=你是运行在小爱音箱上的语音助手。回答要�
 当前使用 DeepSeek deepseek-v4-flash。
 ```
 
-注意：只改 `.env` 后必须重建 Raw Audio 服务端，旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板，以支持当前日期、当前模型播报和单轮收口；如果你手动改过 `config.py` 且不想覆盖，可运行：
+注意：只改 `.env` 后必须重建 Raw Audio 服务端，旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板，以支持纯文字规则、当前日期、当前模型播报和单轮收口；如果你手动改过 `config.py` 且不想覆盖，可运行：
 
 ```sh
 XIAOAI_RAWAUDIO_KEEP_CONFIG=true sh install-rawaudio.sh --restart
