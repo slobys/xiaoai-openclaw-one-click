@@ -8,7 +8,7 @@ except Exception:
     ZoneInfo = None
 
 
-RAWAUDIO_CONFIG_VERSION = "2026-07-12-provider-route-log"
+RAWAUDIO_CONFIG_VERSION = "2026-07-12-voice-provider-switch"
 
 DEFAULT_RULE_PROMPT = (
     "将回复处理成纯文字口播版，不要返回 markdown，不要包含代码块，"
@@ -35,6 +35,7 @@ PROVIDER_DISPLAY_NAMES = {
 PROVIDER_ALIASES = {
     "deepseek": "deepseek",
     "deep seek": "deepseek",
+    "ds": "deepseek",
     "openai": "openai",
     "chatgpt": "openai",
     "gpt": "openai",
@@ -47,6 +48,26 @@ PROVIDER_ALIASES = {
     "openclaw": "openclaw",
     "open": "openclaw",
     "custom": "custom",
+}
+
+SWITCH_PROVIDER_ALIASES = {
+    "open": "openclaw",
+    "opencall": "openclaw",
+    "opencloud": "openclaw",
+    "爪子": "openclaw",
+    "本地模型": "openclaw",
+    "本地ai": "openclaw",
+    "谷歌": "gemini",
+    "gmini": "gemini",
+    "欧拉拉": "ollama",
+    "欧拉马": "ollama",
+    "欧拉玛": "ollama",
+    "奥拉马": "ollama",
+    "奥拉玛": "ollama",
+    "电脑": "ollama",
+    "本地电脑": "ollama",
+    "局域网模型": "ollama",
+    **PROVIDER_ALIASES,
 }
 
 
@@ -88,6 +109,52 @@ def env_list(name, defaults):
     return items or defaults
 
 
+def env_file_path():
+    return env("RAWAUDIO_ENV_FILE", "/app/.env")
+
+
+def env_quote(value):
+    if value == "" or any(ch.isspace() or ch in "\"'#$`\\\\" for ch in value):
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    return value
+
+
+def persist_env_value(name, value):
+    path = env_file_path()
+    if not path:
+        return False
+    try:
+        lines = []
+        found = False
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as handle:
+                lines = handle.readlines()
+        for idx, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            candidate = stripped
+            if candidate.startswith("export "):
+                candidate = candidate[7:].lstrip()
+            key = candidate.split("=", 1)[0].strip()
+            if key == name:
+                prefix = "export " if stripped.startswith("export ") else ""
+                newline = "\n" if line.endswith("\n") else ""
+                lines[idx] = f"{prefix}{name}={env_quote(value)}{newline}"
+                found = True
+                break
+        if not found:
+            if lines and not lines[-1].endswith("\n"):
+                lines[-1] += "\n"
+            lines.append(f"{name}={env_quote(value)}\n")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.writelines(lines)
+        return True
+    except Exception:
+        return False
+
+
 def compact(text):
     return " ".join(str(text or "").split())
 
@@ -101,8 +168,7 @@ def selected_provider():
     return PROVIDER_ALIASES.get(raw, raw)
 
 
-def openai_compatible_settings():
-    provider = selected_provider()
+def provider_settings(provider):
     providers = {
         "deepseek": {
             "base_url": env("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
@@ -138,6 +204,11 @@ def openai_compatible_settings():
     return providers.get(provider) or providers["deepseek"]
 
 
+def openai_compatible_settings():
+    provider = selected_provider()
+    return provider_settings(provider)
+
+
 def default_system_prompt(provider, model):
     display_name = PROVIDER_DISPLAY_NAMES.get(provider, provider or "LLM")
     return DEFAULT_SYSTEM_PROMPT_TEMPLATE.format(provider=display_name, model=model or "unknown")
@@ -161,6 +232,15 @@ def current_model_text():
     display_name = PROVIDER_DISPLAY_NAMES.get(provider, provider or "LLM")
     model = settings.get("model") or "unknown"
     return f"当前使用 {display_name} {model}。"
+
+
+def provider_ready(provider):
+    settings = provider_settings(provider)
+    if not settings.get("base_url"):
+        return False
+    if provider in ("ollama", "openclaw"):
+        return True
+    return bool(settings.get("api_key"))
 
 
 def provider_log_name():
@@ -241,6 +321,54 @@ def is_model_identity_question(text):
     return any(phrase in normalized for phrase in phrases)
 
 
+def switch_provider_from_text(text):
+    normalized = normalize_text(text)
+    if normalized.startswith("切换到"):
+        target = normalized[3:]
+    elif normalized.startswith("切换"):
+        target = normalized[2:]
+    elif normalized.startswith("换到"):
+        target = normalized[2:]
+    else:
+        return None
+    target = target.strip("。.!！?？,，:：；; ")
+    if target.endswith("模式"):
+        target = target[:-2]
+    target = target.strip("。.!！?？,，:：；; ")
+    return SWITCH_PROVIDER_ALIASES.get(target)
+
+
+def reload_openai_manager(provider):
+    try:
+        from core.openai import OpenAIManager
+    except Exception:
+        return
+    settings = provider_settings(provider)
+    OpenAIManager._base_url = str(settings.get("base_url") or "").rstrip("/")
+    OpenAIManager._api_key = str(settings.get("api_key") or "")
+    OpenAIManager._model = str(settings.get("model") or "")
+    OpenAIManager._system_prompt = rawaudio_system_prompt(provider, OpenAIManager._model)
+    OpenAIManager.reset_session()
+
+
+def switch_provider(provider):
+    if provider not in PROVIDER_DISPLAY_NAMES:
+        return "没听清要切换哪个模型。"
+    os.environ["RAWAUDIO_DEFAULT_PROVIDER"] = provider
+    persist_env_value("RAWAUDIO_DEFAULT_PROVIDER", provider)
+    reload_openai_manager(provider)
+    try:
+        from core.openai_conversation import OpenAIConversationController
+        OpenAIConversationController.BACKEND_NAME = provider_log_name()
+        OpenAIConversationController.LOG_MODULE = provider_log_name()
+    except Exception:
+        pass
+    display_name = PROVIDER_DISPLAY_NAMES.get(provider, provider)
+    if not provider_ready(provider):
+        return f"已切换 {display_name}，未配置。"
+    return f"已切换 {display_name}。"
+
+
 def is_ignored_asr_text(text):
     normalized = normalize_text(text)
     if not normalized:
@@ -267,6 +395,12 @@ def install_openai_local_command_patch():
     original_build_messages = OpenAIManager._build_messages
 
     async def patched_request(cls, text):
+        target_provider = switch_provider_from_text(text)
+        if target_provider:
+            response = switch_provider(target_provider)
+            history = cls._sessions.setdefault(cls._session_key, [])
+            cls._append_history(history, text, response)
+            return response
         if is_model_identity_question(text):
             response = current_model_text()
             history = cls._sessions.setdefault(cls._session_key, [])
@@ -369,6 +503,13 @@ def install_rawaudio_runtime_patches():
 
 
 async def before_wakeup(speaker, text, source, app):
+    target_provider = switch_provider_from_text(text)
+    if target_provider:
+        if source == "xiaoai":
+            await speaker.abort_xiaoai()
+        await speaker.play(text=switch_provider(target_provider))
+        return None
+
     if is_model_identity_question(text):
         if source == "xiaoai":
             await speaker.abort_xiaoai()

@@ -215,6 +215,18 @@ OLLAMA_MODEL=qwen3:4b
 deepseek / openai / gemini / ollama / openclaw / custom
 ```
 
+运行中也可以直接对音箱说：
+
+```text
+切换deepseek
+切换openai
+切换谷歌
+切换ollama
+切换open
+```
+
+其中 `切换open` 对应 OpenClaw Bridge，`切换openai` 对应 OpenAI。切换成功后会短播报，例如 `已切换 DeepSeek。`，并写回 `/opt/xiaoai-rawaudio-bridge/.env`，重启后仍生效。
+
 Raw Audio 会按当前 `RAWAUDIO_DEFAULT_PROVIDER` 和模型变量自动生成身份提示，避免问“你是什么模型”时误答成豆包或其他模型。需要完全自定义身份时再设置：
 
 ```env
@@ -227,7 +239,7 @@ XIAOAI_SYSTEM_PROMPT=你是运行在音箱上的AI语音助手，不要自称小
 当前使用 DeepSeek deepseek-v4-flash。
 ```
 
-注意：只改 `.env` 后必须重建 Raw Audio 服务端，旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板，以支持模型路由日志、纯文字规则、当前日期、当前模型播报和单轮收口；如果你手动改过 `config.py` 且不想覆盖，可运行：
+注意：手动改 `.env` 后必须重建 Raw Audio 服务端；用语音口令切换时不用重建。旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板，以支持语音切换模型、模型路由日志、纯文字规则、当前日期、当前模型播报和单轮收口；如果你手动改过 `config.py` 且不想覆盖，可运行：
 
 ```sh
 XIAOAI_RAWAUDIO_KEEP_CONFIG=true sh install-rawaudio.sh --restart
