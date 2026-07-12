@@ -19,6 +19,7 @@ ENV_PROXY_URL="${XIAOAI_RAWAUDIO_ENV_PROXY_URL:-https://gh-proxy.com/https://raw
 MODELS_URL="${XIAOAI_RAWAUDIO_MODELS_URL:-https://github.com/coderzc/open-xiaoai-bridge/releases/download/vad-kws-asr-models/models.zip}"
 CLIENT_INIT_URL="${XIAOAI_CLIENT_INIT_URL:-https://gitee.com/idootop/artifacts/releases/download/open-xiaoai-client/init.sh}"
 CLIENT_BOOT_URL="${XIAOAI_CLIENT_BOOT_URL:-https://gitee.com/idootop/artifacts/releases/download/open-xiaoai-client/boot.sh}"
+RAWAUDIO_CONFIG_VERSION="2026-07-12-model-identity"
 
 MODE=""
 SPEAKER_IP="${SPEAKER_IP:-}"
@@ -105,6 +106,28 @@ fetch_with_fallback_chain() {
     fi
   done
   return 1
+}
+
+install_config_template() {
+  target="$1"
+  tmp="${target}.new.$$"
+  if [ -f "$SCRIPT_DIR/templates/config-rawaudio.py" ]; then
+    cp "$SCRIPT_DIR/templates/config-rawaudio.py" "$tmp"
+  else
+    fetch_with_fallback_chain "$tmp" \
+      "$(cache_bust_url "$CONFIG_URL")" \
+      "$(cache_bust_url "$CONFIG_CN_URL")" \
+      "$(cache_bust_url "$CONFIG_PROXY_URL")" || {
+        rm -f "$tmp"
+        die "下载 config-rawaudio.py 失败"
+      }
+  fi
+  if [ -f "$target" ]; then
+    backup="${target}.bak.$(date +%Y%m%d%H%M%S)"
+    cp "$target" "$backup"
+    log "已备份旧 Raw Audio 配置: $backup"
+  fi
+  mv "$tmp" "$target"
 }
 
 cache_bust_url() {
@@ -381,14 +404,12 @@ ensure_config() {
   mkdir -p "$WORK_DIR"
   if [ ! -f "$WORK_DIR/config.py" ]; then
     log "下载 Raw Audio 配置模板: $WORK_DIR/config.py"
-    if [ -f "$SCRIPT_DIR/templates/config-rawaudio.py" ]; then
-      cp "$SCRIPT_DIR/templates/config-rawaudio.py" "$WORK_DIR/config.py"
-    else
-      fetch_with_fallback_chain "$WORK_DIR/config.py" \
-        "$(cache_bust_url "$CONFIG_URL")" \
-        "$(cache_bust_url "$CONFIG_CN_URL")" \
-        "$(cache_bust_url "$CONFIG_PROXY_URL")" || die "下载 config-rawaudio.py 失败"
-    fi
+    install_config_template "$WORK_DIR/config.py"
+  elif [ "${XIAOAI_RAWAUDIO_KEEP_CONFIG:-}" = "true" ]; then
+    log "保留现有 Raw Audio 配置: $WORK_DIR/config.py"
+  elif ! grep -q "RAWAUDIO_CONFIG_VERSION = \"${RAWAUDIO_CONFIG_VERSION}\"" "$WORK_DIR/config.py"; then
+    log "检测到旧 Raw Audio 配置，刷新 config.py 以支持当前模型播报；.env 和 API Key 会保留。"
+    install_config_template "$WORK_DIR/config.py"
   fi
   if [ ! -f "$WORK_DIR/.env" ]; then
     log "创建环境变量文件: $WORK_DIR/.env"

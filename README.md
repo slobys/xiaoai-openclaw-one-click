@@ -186,6 +186,18 @@ Raw Audio 会按当前 `RAWAUDIO_DEFAULT_PROVIDER` 和模型变量自动生成�
 XIAOAI_SYSTEM_PROMPT=你是运行在小爱音箱上的语音助手。回答要口语化、简短，不要 markdown。
 ```
 
+如果你问“当前模型”“你现在用的是什么大模型”，Raw Audio 会直接按服务端配置播报，例如：
+
+```text
+当前使用 DeepSeek deepseek-v4-flash。
+```
+
+注意：只改 `.env` 后必须重建 Raw Audio 服务端，旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板；如果你手动改过 `config.py` 且不想覆盖，可运行：
+
+```sh
+XIAOAI_RAWAUDIO_KEEP_CONFIG=true sh install-rawaudio.sh --restart
+```
+
 Gemini 走 Google 官方 OpenAI-compatible 接口：
 
 ```env
@@ -260,6 +272,16 @@ OLLAMA_BASE_URL=http://192.168.2.193:11434/v1 OLLAMA_MODEL=qwen3:4b xiaoai-openc
 ```
 
 ## 语音命令
+
+Raw Audio 实验版当前支持这些确认口令：
+
+```text
+当前模型
+你现在用的是什么模型
+你用的是什么大模型
+```
+
+下面这组是刷机版和免刷机版的 MiGPT 口令，不等同于 Raw Audio 的配置菜单：
 
 ```text
 开启AI

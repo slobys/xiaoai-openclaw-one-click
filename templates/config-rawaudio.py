@@ -1,6 +1,8 @@
 import os
 
 
+RAWAUDIO_CONFIG_VERSION = "2026-07-12-model-identity"
+
 DEFAULT_SYSTEM_PROMPT_TEMPLATE = (
     "你是运行在小爱音箱上的语音助手，当前使用 {provider} {model} 模型。"
     "如果用户问你用的是什么模型，只按这个信息回答，不要猜测其他厂商。"
@@ -14,6 +16,24 @@ PROVIDER_DISPLAY_NAMES = {
     "ollama": "Ollama",
     "openclaw": "OpenClaw",
     "custom": "Custom OpenAI-compatible",
+}
+
+
+PROVIDER_ALIASES = {
+    "deepseek": "deepseek",
+    "deep seek": "deepseek",
+    "openai": "openai",
+    "chatgpt": "openai",
+    "gpt": "openai",
+    "gemini": "gemini",
+    "google": "gemini",
+    "谷歌": "gemini",
+    "ollama": "ollama",
+    "欧拉拉": "ollama",
+    "奥拉马": "ollama",
+    "openclaw": "openclaw",
+    "open": "openclaw",
+    "custom": "custom",
 }
 
 
@@ -52,8 +72,13 @@ def compact(text):
     return " ".join(str(text or "").split())
 
 
+def normalize_text(text):
+    return compact(text).replace(" ", "").lower()
+
+
 def selected_provider():
-    return env("RAWAUDIO_DEFAULT_PROVIDER", env("XIAOAI_DEFAULT_PROVIDER", "deepseek")).strip().lower()
+    raw = env("RAWAUDIO_DEFAULT_PROVIDER", env("XIAOAI_DEFAULT_PROVIDER", "deepseek")).strip().lower()
+    return PROVIDER_ALIASES.get(raw, raw)
 
 
 def openai_compatible_settings():
@@ -98,7 +123,63 @@ def default_system_prompt(provider, model):
     return DEFAULT_SYSTEM_PROMPT_TEMPLATE.format(provider=display_name, model=model or "unknown")
 
 
+def current_model_text():
+    settings = openai_compatible_settings()
+    provider = selected_provider()
+    display_name = PROVIDER_DISPLAY_NAMES.get(provider, provider or "LLM")
+    model = settings.get("model") or "unknown"
+    return f"当前使用 {display_name} {model}。"
+
+
+def is_model_identity_question(text):
+    normalized = normalize_text(text)
+    if not normalized:
+        return False
+    phrases = [
+        "当前模型",
+        "现在模型",
+        "所用模型",
+        "使用模型",
+        "大模型",
+        "什么模型",
+        "哪个模型",
+        "模型是什么",
+        "你是什么模型",
+        "你用的是什么",
+    ]
+    return any(phrase in normalized for phrase in phrases)
+
+
+def install_openai_local_command_patch():
+    try:
+        from core.openai import OpenAIManager
+    except Exception:
+        return
+
+    if getattr(OpenAIManager, "_rawaudio_identity_patch_installed", False):
+        return
+
+    original_request = OpenAIManager._request_chat_completion
+
+    async def patched_request(cls, text):
+        if is_model_identity_question(text):
+            response = current_model_text()
+            history = cls._sessions.setdefault(cls._session_key, [])
+            cls._append_history(history, text, response)
+            return response
+        return await original_request(text)
+
+    OpenAIManager._request_chat_completion = classmethod(patched_request)
+    OpenAIManager._rawaudio_identity_patch_installed = True
+
+
 async def before_wakeup(speaker, text, source, app):
+    if is_model_identity_question(text):
+        if source == "xiaoai":
+            await speaker.abort_xiaoai()
+        await speaker.play(text=current_model_text())
+        return None
+
     if source == "kws":
         prompt = env("RAWAUDIO_WAKE_PROMPT", "我在")
         if prompt.lower() not in ("none", "off", "false", "0", "关闭", "无"):
@@ -119,6 +200,8 @@ async def after_wakeup(speaker, source=None, session_key=None):
         return
     await speaker.play(text=prompt)
 
+
+install_openai_local_command_patch()
 
 llm = openai_compatible_settings()
 provider = selected_provider()

@@ -3,7 +3,7 @@
 # 默认模型来源：deepseek / openai / gemini / ollama / openclaw / custom
 RAWAUDIO_DEFAULT_PROVIDER=deepseek
 
-# 默认会按当前 provider/model 自动生成身份提示，避免模型误称自己是其他厂商。
+# 默认会按当前 provider/model 自动生成身份提示；问“当前模型/什么大模型”会直接按配置播报。
 # 需要完全自定义时再取消下一行注释。
 # XIAOAI_SYSTEM_PROMPT=你是运行在小爱音箱上的语音助手。回答要口语化、简短，不要 markdown。
 
