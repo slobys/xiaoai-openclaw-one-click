@@ -157,6 +157,13 @@ Raw Audio 默认像原生小爱一样问一句答一句：唤醒后只处理当�
 RAWAUDIO_SINGLE_TURN=false
 ```
 
+Raw Audio 默认开启回复打断：模型回复播放期间会恢复录音，你开口后会停止当前播报并处理新问题。如果音箱把自己的回复误判成打断，可以先把宽限期调大；仍不稳定再关闭：
+
+```env
+RAWAUDIO_BARGE_IN=true
+RAWAUDIO_BARGE_IN_GRACE_MS=1200
+```
+
 Raw Audio 默认每次请求都会按本机时区动态注入当前日期时间，避免问“今天几号/星期几”时模型乱说旧日期。中国大陆环境保持默认即可；需要改时区时设置：
 
 ```env
@@ -225,7 +232,7 @@ deepseek / openai / gemini / ollama / openclaw / custom
 切换open
 ```
 
-其中 `切换open` 对应 OpenClaw Bridge，`切换openai` 对应 OpenAI。切换成功后会短播报，例如 `已切换 DeepSeek。`，并写回 `/opt/xiaoai-rawaudio-bridge/.env`，重启后仍生效。
+其中 `切换open` 对应 OpenClaw Bridge，`切换openai` 对应 OpenAI。若本地 ASR 把 `切换openai` 听成 `I open AI`、`open AI`、`欧盆AI` 这类，也会按 OpenAI 切换。切换成功后会短播报，例如 `已切换 DeepSeek。`，并写回 `/opt/xiaoai-rawaudio-bridge/.env`，重启后仍生效。
 
 Raw Audio 会按当前 `RAWAUDIO_DEFAULT_PROVIDER` 和模型变量自动生成身份提示，避免问“你是什么模型”时误答成豆包或其他模型。需要完全自定义身份时再设置：
 
@@ -239,7 +246,7 @@ XIAOAI_SYSTEM_PROMPT=你是运行在音箱上的AI语音助手，不要自称小
 当前使用 DeepSeek deepseek-v4-flash。
 ```
 
-注意：手动改 `.env` 后必须重建 Raw Audio 服务端；用语音口令切换时不用重建。旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板，以支持语音切换模型、模型路由日志、纯文字规则、当前日期、当前模型播报和单轮收口；如果你手动改过 `config.py` 且不想覆盖，可运行：
+注意：手动改 `.env` 后必须重建 Raw Audio 服务端；用语音口令切换时不用重建。旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板，以支持实时打断、语音切换容错、模型路由日志、纯文字规则、当前日期、当前模型播报和单轮收口；如果你手动改过 `config.py` 且不想覆盖，可运行：
 
 ```sh
 XIAOAI_RAWAUDIO_KEEP_CONFIG=true sh install-rawaudio.sh --restart
@@ -326,6 +333,12 @@ Raw Audio 实验版当前支持这些确认口令：
 当前模型
 你现在用的是什么模型
 你用的是什么大模型
+切换deepseek
+切换openai
+I open AI
+切换谷歌
+切换ollama
+切换open
 ```
 
 下面这组是刷机版和免刷机版的 MiGPT 口令，不等同于 Raw Audio 的配置菜单：

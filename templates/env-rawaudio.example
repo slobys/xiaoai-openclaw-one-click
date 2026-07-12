@@ -2,6 +2,7 @@
 
 # 默认模型来源：deepseek / openai / gemini / ollama / openclaw / custom
 # 运行中也可以语音切换：切换deepseek / 切换openai / 切换谷歌 / 切换ollama / 切换open
+# 如果 ASR 把“切换openai”听成 “I open AI/open AI/欧盆AI”，也会按 OpenAI 处理。
 RAWAUDIO_DEFAULT_PROVIDER=deepseek
 
 # 默认每次请求会动态注入当前日期时间，避免模型把今天说成训练数据里的旧日期。
@@ -28,6 +29,11 @@ RAWAUDIO_EXIT_KEYWORDS=退出,停止,再见
 # 想恢复旧版连续追问模式时改为 false。
 RAWAUDIO_SINGLE_TURN=true
 RAWAUDIO_AFTER_TURN_PROMPT=
+
+# 回复播放期间默认会恢复录音；你开口时会停止当前播报并处理新问题。
+# 如果音箱把自己的回复误当成打断，可先把宽限期调大，仍不稳定再改为 false。
+RAWAUDIO_BARGE_IN=true
+RAWAUDIO_BARGE_IN_GRACE_MS=1200
 
 # 本地 ASR 偶发把唤醒词识别成这些短句时直接忽略，不送进大模型。
 RAWAUDIO_IGNORE_ASR_TEXTS=你好小气,你好神气,你好想气,你好小七,你好小青,你好小新

@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import os
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
@@ -8,7 +10,7 @@ except Exception:
     ZoneInfo = None
 
 
-RAWAUDIO_CONFIG_VERSION = "2026-07-12-voice-provider-switch"
+RAWAUDIO_CONFIG_VERSION = "2026-07-12-barge-in-switch-aliases"
 
 DEFAULT_RULE_PROMPT = (
     "将回复处理成纯文字口播版，不要返回 markdown，不要包含代码块，"
@@ -51,6 +53,18 @@ PROVIDER_ALIASES = {
 }
 
 SWITCH_PROVIDER_ALIASES = {
+    "openai模式": "openai",
+    "iopenai": "openai",
+    "iopenai模式": "openai",
+    "openai助手": "openai",
+    "openai模型": "openai",
+    "欧盆ai": "openai",
+    "欧喷ai": "openai",
+    "欧朋ai": "openai",
+    "欧派ai": "openai",
+    "欧盆爱": "openai",
+    "欧喷爱": "openai",
+    "欧朋爱": "openai",
     "open": "openclaw",
     "opencall": "openclaw",
     "opencloud": "openclaw",
@@ -68,6 +82,32 @@ SWITCH_PROVIDER_ALIASES = {
     "本地电脑": "ollama",
     "局域网模型": "ollama",
     **PROVIDER_ALIASES,
+}
+
+SWITCH_COMMAND_ALIASES = {
+    "openai": "openai",
+    "iopenai": "openai",
+    "打开openai": "openai",
+    "开启openai": "openai",
+    "使用openai": "openai",
+    "用openai": "openai",
+    "换openai": "openai",
+    "换成openai": "openai",
+    "openai模式": "openai",
+    "切openai": "openai",
+    "切到openai": "openai",
+    "切iopenai": "openai",
+    "切到iopenai": "openai",
+    "欧盆ai": "openai",
+    "欧喷ai": "openai",
+    "欧朋ai": "openai",
+    "欧派ai": "openai",
+    "打开欧盆ai": "openai",
+    "打开欧喷ai": "openai",
+    "打开欧朋ai": "openai",
+    "切换欧盆ai": "openai",
+    "切换欧喷ai": "openai",
+    "切换欧朋ai": "openai",
 }
 
 
@@ -161,6 +201,13 @@ def compact(text):
 
 def normalize_text(text):
     return compact(text).replace(" ", "").lower()
+
+
+def normalize_command_text(text):
+    normalized = normalize_text(text)
+    for ch in "。.!！?？,，:：；;、'\"“”‘’`":
+        normalized = normalized.replace(ch, "")
+    return normalized
 
 
 def selected_provider():
@@ -322,13 +369,25 @@ def is_model_identity_question(text):
 
 
 def switch_provider_from_text(text):
-    normalized = normalize_text(text)
+    normalized = normalize_command_text(text)
+    if normalized in SWITCH_COMMAND_ALIASES:
+        return SWITCH_COMMAND_ALIASES[normalized]
     if normalized.startswith("切换到"):
         target = normalized[3:]
     elif normalized.startswith("切换"):
         target = normalized[2:]
     elif normalized.startswith("换到"):
         target = normalized[2:]
+    elif normalized.startswith("换成"):
+        target = normalized[2:]
+    elif normalized.startswith("打开"):
+        target = normalized[2:]
+    elif normalized.startswith("开启"):
+        target = normalized[2:]
+    elif normalized.startswith("使用"):
+        target = normalized[2:]
+    elif normalized.startswith("用"):
+        target = normalized[1:]
     else:
         return None
     target = target.strip("。.!！?？,，:：；; ")
@@ -336,6 +395,147 @@ def switch_provider_from_text(text):
         target = target[:-2]
     target = target.strip("。.!！?？,，:：；; ")
     return SWITCH_PROVIDER_ALIASES.get(target)
+
+
+def is_barge_in_enabled():
+    return env_bool("RAWAUDIO_BARGE_IN", True)
+
+
+def barge_in_grace_seconds():
+    return env_int("RAWAUDIO_BARGE_IN_GRACE_MS", 1200) / 1000
+
+
+async def stop_active_playback(controller):
+    try:
+        import open_xiaoai_server
+
+        token = getattr(controller, "_playback_token", None)
+        open_xiaoai_server.stop_tts_playback(token)
+    except Exception:
+        pass
+    try:
+        from core.ref import get_speaker
+
+        speaker = get_speaker()
+        if speaker:
+            await speaker.stop_device_audio()
+    except Exception:
+        pass
+
+
+async def wait_for_barge_in_or_tts_done(controller, vad, response):
+    try:
+        from core.services.audio.asr import ASRService
+        from core.utils.logger import logger
+    except Exception:
+        return None
+
+    await controller._stop_recording()
+    tts_task = asyncio.create_task(controller._play_tts(str(response)))
+    recording_started = False
+
+    try:
+        try:
+            await asyncio.wait_for(asyncio.shield(tts_task), timeout=barge_in_grace_seconds())
+            await controller._start_recording()
+            recording_started = True
+            return None
+        except asyncio.TimeoutError:
+            pass
+
+        await controller._start_recording()
+        recording_started = True
+        while getattr(controller, "active", False) and not tts_task.done():
+            speech_task = asyncio.create_task(controller._wait_for_speech(vad))
+            done, pending = await asyncio.wait(
+                {tts_task, speech_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if tts_task in done:
+                with contextlib.suppress(Exception):
+                    await tts_task
+                if not speech_task.done():
+                    speech_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await speech_task
+                return None
+
+            speech_bytes = speech_task.result()
+            if speech_bytes is None:
+                continue
+
+            await stop_active_playback(controller)
+            if not tts_task.done():
+                tts_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await tts_task
+
+            text = ASRService.asr(speech_bytes, sample_rate=16000)
+            if is_ignored_asr_text(text):
+                logger.info("检测到打断，但语音为空或像误触发，已停止当前播报。", module=provider_log_name())
+                return None
+            logger.info(f"⏹️ 检测到打断：{text}", module=provider_log_name())
+            return text
+        return None
+    finally:
+        if not tts_task.done():
+            tts_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await tts_task
+        if not recording_started and getattr(controller, "active", False):
+            await controller._start_recording()
+
+
+async def run_local_turn_with_barge_in(controller):
+    try:
+        from core.ref import get_speaker, get_vad
+        from core.services.audio.asr import ASRService
+        from core.utils.logger import logger
+    except Exception:
+        return "error"
+
+    vad = get_vad()
+    if not vad:
+        logger.error("VAD not available", module=controller.LOG_MODULE)
+        return "error"
+
+    text = None
+    while getattr(controller, "active", False):
+        if text is None:
+            speech_bytes = await controller._wait_for_speech(vad)
+            if speech_bytes is None:
+                return "timeout"
+            text = ASRService.asr(speech_bytes, sample_rate=16000)
+            if not text:
+                logger.debug("ASR empty, retrying", module=controller.LOG_MODULE)
+                return "continue"
+
+        for kw in controller.exit_keywords:
+            if kw in text:
+                logger.info(f"Exit keyword: {kw}", module=controller.LOG_MODULE)
+                return "exit"
+
+        full_text = text
+        if controller.backend._rule_prompt:
+            full_text = text + "\n" + controller.backend._rule_prompt
+
+        run_id = await controller.backend._send_and_track(full_text)
+        await controller._play_send_sound()
+        response = await controller.backend._wait_response(run_id) if run_id else None
+        if response is None:
+            logger.warning(f"No response from {controller.BACKEND_NAME}", module=controller.LOG_MODULE)
+            speaker = get_speaker()
+            if speaker:
+                await speaker.play(text="抱歉，我没有收到回复")
+            return "continue"
+
+        interrupted_text = await wait_for_barge_in_or_tts_done(controller, vad, response)
+        if interrupted_text:
+            text = interrupted_text
+            continue
+        return "continue"
+
+    return "exit"
 
 
 def reload_openai_manager(provider):
@@ -467,7 +667,10 @@ def install_rawaudio_runtime_patches():
         original_xiaoai_turn = OpenAIConversationController._run_one_turn_with_xiaoai_asr
 
         async def patched_local_turn(self):
-            result = await original_local_turn(self)
+            if is_barge_in_enabled():
+                result = await run_local_turn_with_barge_in(self)
+            else:
+                result = await original_local_turn(self)
             if is_single_turn_mode() and result == "continue":
                 return "timeout"
             return result
