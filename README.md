@@ -151,6 +151,18 @@ Raw Audio 工作目录：
 RAWAUDIO_WAKE_KEYWORDS=你好小黑,小黑小黑
 ```
 
+Raw Audio 默认像原生小爱一样问一句答一句：唤醒后只处理当前问题，回答完就结束本轮监听，不会继续把后面的犹豫词、杂音或误识别短句送进大模型。需要恢复旧版连续追问时再改：
+
+```env
+RAWAUDIO_SINGLE_TURN=false
+```
+
+如果本地 ASR 经常把唤醒词误识别成“你好小气/你好神气/你好想气”这类短句，可以在 `.env` 里继续扩展忽略列表：
+
+```env
+RAWAUDIO_IGNORE_ASR_TEXTS=你好小气,你好神气,你好想气
+```
+
 OpenWrt 上如果宿主机能解析 `api.deepseek.com`，但容器内不能解析：
 
 ```sh
@@ -192,7 +204,7 @@ XIAOAI_SYSTEM_PROMPT=你是运行在小爱音箱上的语音助手。回答要�
 当前使用 DeepSeek deepseek-v4-flash。
 ```
 
-注意：只改 `.env` 后必须重建 Raw Audio 服务端，旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板；如果你手动改过 `config.py` 且不想覆盖，可运行：
+注意：只改 `.env` 后必须重建 Raw Audio 服务端，旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板，以支持当前模型播报和单轮收口；如果你手动改过 `config.py` 且不想覆盖，可运行：
 
 ```sh
 XIAOAI_RAWAUDIO_KEEP_CONFIG=true sh install-rawaudio.sh --restart

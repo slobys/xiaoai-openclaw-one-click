@@ -1,7 +1,7 @@
 import os
 
 
-RAWAUDIO_CONFIG_VERSION = "2026-07-12-model-identity"
+RAWAUDIO_CONFIG_VERSION = "2026-07-12-single-turn"
 
 DEFAULT_SYSTEM_PROMPT_TEMPLATE = (
     "你是运行在小爱音箱上的语音助手，当前使用 {provider} {model} 模型。"
@@ -56,6 +56,13 @@ def env_float(name, default):
         return value if value >= 0 else default
     except ValueError:
         return default
+
+
+def env_bool(name, default):
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    return raw.strip().lower() not in ("0", "false", "no", "off", "关闭", "否")
 
 
 def env_list(name, defaults):
@@ -131,6 +138,15 @@ def current_model_text():
     return f"当前使用 {display_name} {model}。"
 
 
+def is_single_turn_mode():
+    return env_bool("RAWAUDIO_SINGLE_TURN", True)
+
+
+def after_turn_prompt():
+    default_prompt = "" if is_single_turn_mode() else env("RAWAUDIO_EXIT_PROMPT", "再见")
+    return env("RAWAUDIO_AFTER_TURN_PROMPT", default_prompt)
+
+
 def is_model_identity_question(text):
     normalized = normalize_text(text)
     if not normalized:
@@ -148,6 +164,19 @@ def is_model_identity_question(text):
         "你用的是什么",
     ]
     return any(phrase in normalized for phrase in phrases)
+
+
+def is_ignored_asr_text(text):
+    normalized = normalize_text(text)
+    if not normalized:
+        return True
+    if len(normalized) <= 1:
+        return True
+    ignored_phrases = env_list(
+        "RAWAUDIO_IGNORE_ASR_TEXTS",
+        ["你好小气", "你好神气", "你好想气", "你好小七", "你好小青", "你好小新"],
+    )
+    return any(normalized == normalize_text(phrase) for phrase in ignored_phrases)
 
 
 def install_openai_local_command_patch():
@@ -173,6 +202,54 @@ def install_openai_local_command_patch():
     OpenAIManager._rawaudio_identity_patch_installed = True
 
 
+def install_rawaudio_runtime_patches():
+    install_openai_local_command_patch()
+
+    try:
+        from core.openai_conversation import OpenAIConversationController
+    except Exception:
+        return
+
+    if not getattr(OpenAIConversationController, "_rawaudio_single_turn_patch_installed", False):
+        original_local_turn = OpenAIConversationController._run_one_turn_with_local_asr
+        original_xiaoai_turn = OpenAIConversationController._run_one_turn_with_xiaoai_asr
+
+        async def patched_local_turn(self):
+            result = await original_local_turn(self)
+            if is_single_turn_mode() and result == "continue":
+                return "timeout"
+            return result
+
+        async def patched_xiaoai_turn(self):
+            result = await original_xiaoai_turn(self)
+            if is_single_turn_mode() and result == "continue":
+                return "timeout"
+            return result
+
+        OpenAIConversationController._run_one_turn_with_local_asr = patched_local_turn
+        OpenAIConversationController._run_one_turn_with_xiaoai_asr = patched_xiaoai_turn
+        OpenAIConversationController._rawaudio_single_turn_patch_installed = True
+
+    try:
+        from core.services.audio.asr import ASRService
+    except Exception:
+        return
+
+    if getattr(ASRService, "_rawaudio_ignore_patch_installed", False):
+        return
+
+    original_asr = ASRService.asr
+
+    def patched_asr(*args, **kwargs):
+        text = original_asr(*args, **kwargs)
+        if is_ignored_asr_text(text):
+            return ""
+        return text
+
+    ASRService.asr = patched_asr
+    ASRService._rawaudio_ignore_patch_installed = True
+
+
 async def before_wakeup(speaker, text, source, app):
     if is_model_identity_question(text):
         if source == "xiaoai":
@@ -195,13 +272,15 @@ async def before_wakeup(speaker, text, source, app):
 
 
 async def after_wakeup(speaker, source=None, session_key=None):
-    prompt = env("RAWAUDIO_EXIT_PROMPT", "再见")
+    prompt = after_turn_prompt()
     if prompt.lower() in ("none", "off", "false", "0", "关闭", "无"):
+        return
+    if not prompt:
         return
     await speaker.play(text=prompt)
 
 
-install_openai_local_command_patch()
+install_rawaudio_runtime_patches()
 
 llm = openai_compatible_settings()
 provider = selected_provider()
@@ -209,7 +288,7 @@ provider = selected_provider()
 APP_CONFIG = {
     "wakeup": {
         "keywords": env_list("RAWAUDIO_WAKE_KEYWORDS", ["你好小黑", "小黑小黑"]),
-        "timeout": env_int("RAWAUDIO_WAKE_TIMEOUT", 20),
+        "timeout": env_int("RAWAUDIO_WAKE_TIMEOUT", 10),
         "before_wakeup": before_wakeup,
         "after_wakeup": after_wakeup,
     },
@@ -231,9 +310,9 @@ APP_CONFIG = {
         "int8": env("RAWAUDIO_ASR_INT8", "true").lower() not in ("0", "false", "no", "off"),
     },
     "xiaoai": {
-        "continuous_conversation_mode": True,
+        "continuous_conversation_mode": not is_single_turn_mode(),
         "exit_command_keywords": env_list("RAWAUDIO_EXIT_KEYWORDS", ["停止", "退出", "再见"]),
-        "max_listening_retries": env_int("RAWAUDIO_MAX_LISTENING_RETRIES", 2),
+        "max_listening_retries": env_int("RAWAUDIO_MAX_LISTENING_RETRIES", 0 if is_single_turn_mode() else 2),
         "exit_prompt": env("RAWAUDIO_EXIT_PROMPT", "再见"),
         "continuous_conversation_keywords": env_list(
             "RAWAUDIO_CONTINUOUS_KEYWORDS",

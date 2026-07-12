@@ -13,6 +13,14 @@ RAWAUDIO_WAKE_PROMPT=我在
 RAWAUDIO_EXIT_PROMPT=再见
 RAWAUDIO_EXIT_KEYWORDS=退出,停止,再见
 
+# 默认像原生小爱一样问一句答一句，回答完就结束本轮监听。
+# 想恢复旧版连续追问模式时改为 false。
+RAWAUDIO_SINGLE_TURN=true
+RAWAUDIO_AFTER_TURN_PROMPT=
+
+# 本地 ASR 偶发把唤醒词识别成这些短句时直接忽略，不送进大模型。
+RAWAUDIO_IGNORE_ASR_TEXTS=你好小气,你好神气,你好想气,你好小七,你好小青,你好小新
+
 # VAD/KWS 参数。误触发多就调高 threshold；不灵敏就调低。
 RAWAUDIO_KWS_THRESHOLD=0.2
 RAWAUDIO_KWS_SCORE=2.0
