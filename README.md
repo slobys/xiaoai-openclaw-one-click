@@ -157,14 +157,14 @@ Raw Audio 默认像原生小爱一样问一句答一句：唤醒后只处理当�
 RAWAUDIO_SINGLE_TURN=false
 ```
 
-Raw Audio 默认关闭实验性的回复打断，避免音箱把自己的播报收进麦克风后再次送进模型，造成连续自问自答。确认你的音箱没有回声误触发后，才建议手动开启；宽限期越长，误触发越少：
+Raw Audio 支持安全的唤醒词打断：模型正在播报时，再说一次当前唤醒词（默认“你好小黑”或“小黑小黑”），播报会停止；听到提示音后再说新问题。播放期间只用 KWS 判断唤醒词，不会把音箱自己的整段回复识别成问题，因此不会再次形成自问自答：
 
 ```env
-RAWAUDIO_BARGE_IN=true
-RAWAUDIO_BARGE_IN_GRACE_MS=1200
+RAWAUDIO_WAKE_WORD_BARGE_IN=true
+RAWAUDIO_WAKE_WORD_BARGE_IN_GRACE_MS=300
 ```
 
-从 `2026-07-12-barge-in-switch-aliases` 版本升级时，重建脚本会自动把旧默认值 `RAWAUDIO_BARGE_IN=true` 改回 `false`。
+Raw Audio 当前没有声学回声消除（AEC），所以不再使用“任意声音触发 VAD 打断”：那种方式无法区分用户说话和音箱自身播报。需要关闭唤醒词打断时，将上面的开关改为 `false`。
 
 Raw Audio 默认每次请求都会按本机时区动态注入当前日期时间，避免问“今天几号/星期几”时模型乱说旧日期。中国大陆环境保持默认即可；需要改时区时设置：
 
@@ -248,7 +248,7 @@ XIAOAI_SYSTEM_PROMPT=你是运行在音箱上的AI语音助手，不要自称小
 当前使用 DeepSeek deepseek-v4-flash。
 ```
 
-注意：手动改 `.env` 后必须重建 Raw Audio 服务端；用语音口令切换时不用重建。旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板，以恢复安全的单轮问答，并支持语音切换容错、模型路由日志、纯文字规则、当前日期和当前模型播报；如果你手动改过 `config.py` 且不想覆盖，可运行：
+注意：手动改 `.env` 后必须重建 Raw Audio 服务端；用语音口令切换时不用重建。旧安装还要刷新 `/opt/xiaoai-rawaudio-bridge/config.py`。新版脚本会在重建时自动备份旧 `config.py` 并刷新模板，以支持唤醒词安全打断、单轮问答、语音切换容错、模型路由日志、纯文字规则、当前日期和当前模型播报；如果你手动改过 `config.py` 且不想覆盖，可运行：
 
 ```sh
 XIAOAI_RAWAUDIO_KEEP_CONFIG=true sh install-rawaudio.sh --restart

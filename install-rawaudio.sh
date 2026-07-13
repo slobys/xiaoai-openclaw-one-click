@@ -19,7 +19,7 @@ ENV_PROXY_URL="${XIAOAI_RAWAUDIO_ENV_PROXY_URL:-https://gh-proxy.com/https://raw
 MODELS_URL="${XIAOAI_RAWAUDIO_MODELS_URL:-https://github.com/coderzc/open-xiaoai-bridge/releases/download/vad-kws-asr-models/models.zip}"
 CLIENT_INIT_URL="${XIAOAI_CLIENT_INIT_URL:-https://gitee.com/idootop/artifacts/releases/download/open-xiaoai-client/init.sh}"
 CLIENT_BOOT_URL="${XIAOAI_CLIENT_BOOT_URL:-https://gitee.com/idootop/artifacts/releases/download/open-xiaoai-client/boot.sh}"
-RAWAUDIO_CONFIG_VERSION="2026-07-13-safe-single-turn"
+RAWAUDIO_CONFIG_VERSION="2026-07-13-wake-word-barge-in"
 
 MODE=""
 SPEAKER_IP="${SPEAKER_IP:-}"
@@ -408,11 +408,7 @@ ensure_config() {
   elif [ "${XIAOAI_RAWAUDIO_KEEP_CONFIG:-}" = "true" ]; then
     log "保留现有 Raw Audio 配置: $WORK_DIR/config.py"
   elif ! grep -q "RAWAUDIO_CONFIG_VERSION = \"${RAWAUDIO_CONFIG_VERSION}\"" "$WORK_DIR/config.py"; then
-    if [ -f "$WORK_DIR/.env" ] && grep -q '^RAWAUDIO_BARGE_IN=true$' "$WORK_DIR/.env"; then
-      sed -i 's/^RAWAUDIO_BARGE_IN=true$/RAWAUDIO_BARGE_IN=false/' "$WORK_DIR/.env"
-      log "已关闭不稳定的 Raw Audio 实时打断，避免音箱把自己的回复再次送进模型。"
-    fi
-    log "检测到旧 Raw Audio 配置，刷新 config.py 以支持安全单轮问答、语音切换容错、模型路由日志、纯文字规则、当前日期和当前模型播报；.env 和 API Key 会保留。"
+    log "检测到旧 Raw Audio 配置，刷新 config.py 以支持唤醒词安全打断、单轮问答、语音切换容错、模型路由日志、纯文字规则、当前日期和当前模型播报；.env 和 API Key 会保留。"
     install_config_template "$WORK_DIR/config.py"
   fi
   if [ ! -f "$WORK_DIR/.env" ]; then

@@ -10,7 +10,7 @@ except Exception:
     ZoneInfo = None
 
 
-RAWAUDIO_CONFIG_VERSION = "2026-07-13-safe-single-turn"
+RAWAUDIO_CONFIG_VERSION = "2026-07-13-wake-word-barge-in"
 
 DEFAULT_RULE_PROMPT = (
     "将回复处理成纯文字口播版，不要返回 markdown，不要包含代码块，"
@@ -397,12 +397,12 @@ def switch_provider_from_text(text):
     return SWITCH_PROVIDER_ALIASES.get(target)
 
 
-def is_barge_in_enabled():
-    return env_bool("RAWAUDIO_BARGE_IN", False)
+def is_wake_word_barge_in_enabled():
+    return env_bool("RAWAUDIO_WAKE_WORD_BARGE_IN", True)
 
 
 def barge_in_grace_seconds():
-    return env_int("RAWAUDIO_BARGE_IN_GRACE_MS", 1200) / 1000
+    return env_int("RAWAUDIO_WAKE_WORD_BARGE_IN_GRACE_MS", 300) / 1000
 
 
 async def stop_active_playback(controller):
@@ -423,70 +423,71 @@ async def stop_active_playback(controller):
         pass
 
 
-async def wait_for_barge_in_or_tts_done(controller, vad, response):
+async def wait_for_wake_word_or_tts_done(controller, response):
     try:
-        from core.services.audio.asr import ASRService
-        from core.utils.logger import logger
+        from core.ref import get_kws
     except Exception:
-        return None
+        get_kws = None
 
     await controller._stop_recording()
     tts_task = asyncio.create_task(controller._play_tts(str(response)))
+    kws = get_kws() if get_kws else None
+    if not kws:
+        await tts_task
+        return False
+
+    loop = asyncio.get_running_loop()
+    interrupt_future = loop.create_future()
+    original_on_message = kws.on_message
     recording_started = False
+
+    def on_wake_word(text):
+        def resolve_interrupt():
+            if not interrupt_future.done():
+                interrupt_future.set_result(text)
+
+        loop.call_soon_threadsafe(resolve_interrupt)
 
     try:
         try:
             await asyncio.wait_for(asyncio.shield(tts_task), timeout=barge_in_grace_seconds())
-            await controller._start_recording()
-            recording_started = True
-            return None
+            return False
         except asyncio.TimeoutError:
             pass
 
+        kws.on_message = on_wake_word
         await controller._start_recording()
         recording_started = True
-        while getattr(controller, "active", False) and not tts_task.done():
-            speech_task = asyncio.create_task(controller._wait_for_speech(vad))
-            done, pending = await asyncio.wait(
-                {tts_task, speech_task},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if tts_task in done:
-                with contextlib.suppress(Exception):
-                    await tts_task
-                if not speech_task.done():
-                    speech_task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await speech_task
-                return None
+        kws.resume()
+        done, _ = await asyncio.wait(
+            {tts_task, interrupt_future},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if interrupt_future not in done:
+            with contextlib.suppress(Exception):
+                await tts_task
+            return False
 
-            speech_bytes = speech_task.result()
-            if speech_bytes is None:
-                continue
-
-            await stop_active_playback(controller)
-            if not tts_task.done():
-                tts_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await tts_task
-
-            text = ASRService.asr(speech_bytes, sample_rate=16000)
-            if is_ignored_asr_text(text):
-                logger.info("检测到打断，但语音为空或像误触发，已停止当前播报。", module=provider_log_name())
-                return None
-            logger.info(f"⏹️ 检测到打断：{text}", module=provider_log_name())
-            return text
-        return None
-    finally:
+        await stop_active_playback(controller)
         if not tts_task.done():
             tts_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await tts_task
-        if not recording_started and getattr(controller, "active", False):
-            await controller._start_recording()
+        return True
+    finally:
+        kws.pause()
+        kws.on_message = original_on_message
+        if not interrupt_future.done():
+            interrupt_future.cancel()
+        if not tts_task.done():
+            tts_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await tts_task
+        if recording_started:
+            await controller._stop_recording()
 
 
-async def run_local_turn_with_barge_in(controller):
+async def run_local_turn_with_wake_word_barge_in(controller):
     try:
         from core.ref import get_speaker, get_vad
         from core.services.audio.asr import ASRService
@@ -529,10 +530,17 @@ async def run_local_turn_with_barge_in(controller):
                 await speaker.play(text="抱歉，我没有收到回复")
             return "continue"
 
-        interrupted_text = await wait_for_barge_in_or_tts_done(controller, vad, response)
-        if interrupted_text:
-            text = interrupted_text
+        interrupted = await wait_for_wake_word_or_tts_done(controller, response)
+        if interrupted:
+            logger.info("⏹️ 唤醒词已打断当前播报，请继续说新问题。", module=provider_log_name())
+            await controller._play_notify()
+            await controller._start_recording()
+            text = None
             continue
+        if not is_single_turn_mode():
+            await controller._play_notify()
+            await controller._start_recording()
+            await controller._wait_for_silence(vad)
         return "continue"
 
     return "exit"
@@ -667,8 +675,8 @@ def install_rawaudio_runtime_patches():
         original_xiaoai_turn = OpenAIConversationController._run_one_turn_with_xiaoai_asr
 
         async def patched_local_turn(self):
-            if is_barge_in_enabled():
-                result = await run_local_turn_with_barge_in(self)
+            if is_wake_word_barge_in_enabled():
+                result = await run_local_turn_with_wake_word_barge_in(self)
             else:
                 result = await original_local_turn(self)
             if is_single_turn_mode() and result == "continue":
