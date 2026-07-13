@@ -10,7 +10,7 @@ except Exception:
     ZoneInfo = None
 
 
-RAWAUDIO_CONFIG_VERSION = "2026-07-12-barge-in-switch-aliases"
+RAWAUDIO_CONFIG_VERSION = "2026-07-13-safe-single-turn"
 
 DEFAULT_RULE_PROMPT = (
     "将回复处理成纯文字口播版，不要返回 markdown，不要包含代码块，"
@@ -398,7 +398,7 @@ def switch_provider_from_text(text):
 
 
 def is_barge_in_enabled():
-    return env_bool("RAWAUDIO_BARGE_IN", True)
+    return env_bool("RAWAUDIO_BARGE_IN", False)
 
 
 def barge_in_grace_seconds():

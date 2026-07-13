@@ -30,9 +30,9 @@ RAWAUDIO_EXIT_KEYWORDS=退出,停止,再见
 RAWAUDIO_SINGLE_TURN=true
 RAWAUDIO_AFTER_TURN_PROMPT=
 
-# 回复播放期间默认会恢复录音；你开口时会停止当前播报并处理新问题。
-# 如果音箱把自己的回复误当成打断，可先把宽限期调大，仍不稳定再改为 false。
-RAWAUDIO_BARGE_IN=true
+# 实时打断属于实验功能，默认关闭，避免音箱把自己的回复收进麦克风后反复自问自答。
+# 确认音箱没有回声误触发后，可手动改为 true；宽限期越长，误触发越少。
+RAWAUDIO_BARGE_IN=false
 RAWAUDIO_BARGE_IN_GRACE_MS=1200
 
 # 本地 ASR 偶发把唤醒词识别成这些短句时直接忽略，不送进大模型。
